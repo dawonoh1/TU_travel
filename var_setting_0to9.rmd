@@ -1,0 +1,1429 @@
+---
+title: "var_setting_2"
+author: "dawon"
+date: "2025-04-27"
+output: html_document
+---
+
+
+#import packages
+```{python setup, include=FALSE} 
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+```
+
+# Import existing dataset
+```{python, include=FALSE}
+# Define file paths
+folder_path = r"C:\Users\ohdaw\OneDrive - Harvard University\tu_data"
+file_path = os.path.join(folder_path, "data_classified_0to9.csv")
+#output_path = os.path.join(folder_path, ".csv")
+
+# Load dataset
+dT = pd.read_csv(file_path, encoding="utf-8-sig")
+```
+
+# children present at journey category
+```{python echo=FALSE}
+# Function to classify journeys
+def classify_journey(dT):
+    
+    dT["TripHasChild"] = (dT["PartyNumu10"] > 0) 
+
+    # Identify journeys with any children present
+    journey_with_children = dT.groupby("JourneyId")["TripHasChild"].agg(
+        lambda x: 1 if x.all() else 2 if x.any() else 3
+    ).rename("JourneyWithChildren")
+
+    # Assign the column directly instead of merging
+    dT  = dT .drop(columns=["JourneyWithChildren"], errors="ignore")
+    dT = dT.merge(journey_with_children, on="JourneyId", how="left")
+
+    # Create a new column indicating the presence of specific child age groups
+    def child_presence(row):
+        if row["PartyNumu10"] > 0 and row["PartyNum1017"] > 0:
+            return "Both 0–9 and 10–17"
+        elif row["PartyNumu10"] > 0:
+            return "0–9 only"
+        elif row["PartyNum1017"] > 0:
+            return "10–17 only"
+        else:
+            return "No children"
+
+    dT["ChildPresence"] = dT.apply(child_presence, axis=1)
+
+    # Create dummy variables
+    dT["ChildPresence_017"] = (dT["ChildPresence"] == "Both 0–9 and 10–17").astype(int)
+    dT["ChildPresence_09"] = (dT["ChildPresence"] == "0–9 only").astype(int)
+    dT["ChildPresence_1017"] = (dT["ChildPresence"] == "10–17 only").astype(int)
+
+    dT = dT[dT["AgeSimple"] <= 85]
+    return dT
+
+# Apply classification
+dT = classify_journey(dT)
+```
+
+###Filter out only adult respondants
+```{python include=FALSE}
+# Ensure RespAgeSimple is numeric
+dT["RespAgeSimple"] = pd.to_numeric(dT["RespAgeSimple"], errors="coerce")
+
+# Filter to include only rows with RespAgeSimple >= 18
+df = dT[(dT["RespAgeSimple"] >= 18) & (dT["AgeSimple"] <= 85) & (dT["RespAgeSimple"] <= 85)].copy()
+
+# Check the result
+df.head()
+```
+
+#caregiver's age distribution
+```{python echo=TRUE}
+# Group by age and count unique journeys
+#journeys_by_age = dT.groupby("RespAgeSimple")["JourneyId"].nunique().reset_index()
+
+# Rename columns
+#journeys_by_age.columns = ["Respondent Age", "Number of Journeys"]
+
+# Sort by age (optional)
+#journeys_by_age = journeys_by_age.sort_values("Respondent Age").reset_index(drop=True)
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Step 1: Group by RespAgeSimple and SessionId, count unique JourneyIds
+journey_counts = (
+  df.groupby(["RespAgeSimple", "SessionId"])["JourneyId"]
+  .nunique()
+  .reset_index(name="NumJourneys")
+)
+
+# Step 2: Sum journeys per age group (across all sessions)
+age_journey_summary = journey_counts.groupby("RespAgeSimple")["NumJourneys"].sum().reset_index()
+
+# Step 3: Ensure RespAgeSimple is a categorical variable with correct order
+sorted_ages = sorted(age_journey_summary["RespAgeSimple"].dropna().unique())
+age_journey_summary["RespAgeSimple"] = pd.Categorical(age_journey_summary["RespAgeSimple"], 
+                                                      categories=sorted_ages,
+                                                      ordered=True)
+
+# Step 4: Define tick labels (every 2 years)
+custom_ticks = list(range(18,85,2))
+
+# Step 5: Plot
+plt.figure(figsize=(8, 4))
+sns.barplot(data=age_journey_summary, x="RespAgeSimple", y="NumJourneys", color="#4C72B0")
+
+# Set custom ticks — match ticks to x-axis labels
+plt.xticks(
+    ticks=[i for i, age in enumerate(sorted_ages) if age in custom_ticks],
+    labels=[age for age in sorted_ages if age in custom_ticks],
+    rotation=0
+)
+
+# Labels and title
+plt.title("Number of Journeys by Respondent Age (18–85)", fontsize=14)
+plt.xlabel("Respondent Age", fontsize=12)
+plt.ylabel("Count", fontsize=12)
+
+# Adjust layout
+plt.tight_layout(pad=2)
+plt.subplots_adjust(left=0.12)
+plt.show()
+```
+
+```{python}
+df[(df["RespAgeSimple"] >= 50) & (df["RespAgeSimple"] <= 85)]["RespAgeSimple"].value_counts().sort_index()
+```
+```{python}
+# Step 1: Group by RespAgeSimple and SessionId, count unique JourneyIds
+journey_counts = (
+  df.groupby(["RespAgeSimple", "SessionId"])["JourneyId"]
+  .nunique()
+  .reset_index(name="NumJourneys")
+)
+
+# Step 2: Sum journeys per age group (across all sessions)
+age_journey_summary = journey_counts.groupby("RespAgeSimple")["NumJourneys"].sum().reset_index()
+
+# Step 3: Ensure RespAgeSimple is a categorical variable with correct order
+sorted_ages = sorted(age_journey_summary["RespAgeSimple"].dropna().unique())
+age_journey_summary["RespAgeSimple"] = pd.Categorical(age_journey_summary["RespAgeSimple"], 
+                                                      categories=sorted_ages,
+                                                      ordered=True)
+
+age_journey_summary = age_journey_summary[
+    (age_journey_summary["RespAgeSimple"] >= 23) &
+    (age_journey_summary["RespAgeSimple"] <= 69)
+]
+
+# Step 4: Define tick labels (every 2 years)
+sorted_ages = sorted(age_journey_summary["RespAgeSimple"].dropna().unique())
+age_journey_summary["RespAgeSimple"] = pd.Categorical(
+    age_journey_summary["RespAgeSimple"],
+    categories=sorted_ages,
+    ordered=True
+)
+age_journey_summary["RespAgeSimple"] = pd.to_numeric(age_journey_summary["RespAgeSimple"])
+
+# Step 5: Plot
+# Set style
+sns.set(style="whitegrid")
+
+# Variable
+var = "RespAgeSimple"
+
+plt.figure(figsize=(8, 4))
+
+# Plot histogram-style barplot for age distribution
+sns.histplot(
+    data=age_journey_summary,
+    x=var,
+    weights="NumJourneys",   # use journey counts as weights
+    bins=range(23, 70),      # bins from 23 to 69 (1-year width)
+    color="#4C72B0"
+)
+
+# Axis labels and limits
+plt.xlim(23, 69)
+plt.ylabel("Count", fontsize=12)
+plt.xlabel("Respondent Age", fontsize=12)
+
+xticks = list(range(23, 70, 2))  # every 2 years
+if 23 not in xticks:
+    xticks = [23] + xticks
+if 69 not in xticks:
+    xticks.append(69)
+
+plt.xticks(xticks)
+
+# Title
+plt.title("Number of Tours by Respondent Age (23–69)", fontsize=14)
+
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+# Step 1: Group by RespAgeSimple and SessionId, count unique JourneyIds
+journey_counts = (
+  df.groupby(["RespAgeSimple", "SessionId"])["JourneyId"]
+  .nunique()
+  .reset_index(name="NumJourneys")
+)
+
+# Step 2: Sum journeys per age group (across all sessions)
+age_journey_summary = journey_counts.groupby("RespAgeSimple")["NumJourneys"].sum().reset_index()
+
+# Step 3: Ensure RespAgeSimple is a categorical variable with correct order
+sorted_ages = sorted(age_journey_summary["RespAgeSimple"].dropna().unique())
+age_journey_summary["RespAgeSimple"] = pd.Categorical(age_journey_summary["RespAgeSimple"], 
+                                                      categories=sorted_ages,
+                                                      ordered=True)
+
+age_journey_summary = age_journey_summary[
+    (age_journey_summary["RespAgeSimple"] >= 18) &
+    (age_journey_summary["RespAgeSimple"] <= 85)
+]
+
+# Step 4: Define tick labels (every 2 years)
+sorted_ages = sorted(age_journey_summary["RespAgeSimple"].dropna().unique())
+age_journey_summary["RespAgeSimple"] = pd.Categorical(
+    age_journey_summary["RespAgeSimple"],
+    categories=sorted_ages,
+    ordered=True
+)
+age_journey_summary["RespAgeSimple"] = pd.to_numeric(age_journey_summary["RespAgeSimple"])
+
+# Step 5: Plot
+# Set style
+sns.set(style="whitegrid")
+
+# Variable
+var = "RespAgeSimple"
+
+plt.figure(figsize=(8, 4))
+
+# Plot histogram-style barplot for age distribution
+sns.histplot(
+    data=age_journey_summary,
+    x=var,
+    weights="NumJourneys",   # use journey counts as weights
+    bins=range(18, 86),      # bins from 23 to 69 (1-year width)
+    color="#4C72B0"
+)
+
+# Axis labels and limits
+plt.xlim(18, 84)
+plt.ylabel("Count", fontsize=12)
+plt.xlabel("Respondent Age (18–85)", fontsize=12)
+
+xticks = list(range(18, 86, 2))  # every 2 years
+if 18 not in xticks:
+    xticks = [18] + xticks
+if 86 not in xticks:
+    xticks.append(86)
+
+plt.xticks(xticks)
+
+# Title
+plt.title("Tours Counts by Respondent Age", fontsize=14)
+
+plt.tight_layout()
+plt.show()
+```
+```{python}
+# Total respondents with age <= 85
+total = df[df["RespAgeSimple"] <= 85].shape[0]
+
+# Count of respondents with age >= 70
+count_70plus = df[(df["RespAgeSimple"] <= 85) & (df["RespAgeSimple"] >= 70)].shape[0]
+
+# Percentage (use built-in round)
+percentage_70plus = round(count_70plus / total * 100, 2)
+
+print("Count (>= 70):", count_70plus)
+print("Total (<= 85):", total)
+print("Percentage (>= 70):", percentage_70plus, "%")
+```
+
+```{python}
+df = df[df["RespAgeSimple"] <= 69]
+
+# Count unique JourneyIds
+num_journeys = df["JourneyId"].nunique()
+print("Number of unique journeys (RespAgeSimple <= 69):", num_journeys)
+
+num_sessions = df["SessionId"].nunique()
+print("Number of unique households (RespAgeSimple <= 69):", num_sessions)
+```
+
+
+# younger/older sibling in hh 
+```{python}
+#Whether ther's a younger/older sibling presents in HH
+df['10to17_hh'] = df['AgeSimple'].apply(
+    lambda x: 1 if 9 < x < 18 else 0
+)
+
+df['0to9_hh'] = df['AgeSimple'].apply(
+    lambda x: 1 if 0 <= x <= 9 else 0
+)
+```
+
+#The number of younger/older sibling in HH
+```{python}
+# Step 1: Recalculate number of children per age group in household
+df["Num_0_9"] = df["HousehNumPers"] - df["HousehNumPers1084"]
+households_with_85plus = df[df["AgeSimple"] >= 85]["SessionId"].unique()
+df.loc[df["SessionId"].isin(households_with_85plus), "Num_0_9"] = np.nan
+
+df["Num_0_17"] = df["HousehNumPers"] - df["HousehNumAdults"]
+df["Num_10_17"] = df["Num_0_17"] - df["Num_0_9"]
+df.loc[df["Num_10_17"] < 0, "Num_10_17"] = np.nan
+df = df.dropna(subset=["Num_10_17"])
+
+# Step 2: Get one row per household
+household_df = df.drop_duplicates("SessionId")[["SessionId", "Num_0_9", "Num_10_17"]].copy()
+
+n09 = household_df["Num_0_9"].fillna(0)
+n1017 = household_df["Num_10_17"].fillna(0)
+
+# Step 3: Create binary indicators
+household_df["ChildinHH_017"] = ((n09 > 0) & (n1017 > 0)).astype(int)
+household_df["ChildinHH_09"] = ((n09 > 0) & (n1017 == 0)).astype(int)
+household_df["ChildinHH_1017"] = ((n09 == 0) & (n1017 > 0)).astype(int)
+household_df["ChildinHH_None"] = ((n09 == 0) & (n1017 == 0)).astype(int)
+
+# Optional: merge back if needed
+df = df.merge(
+    household_df[["SessionId", "ChildinHH_017", "ChildinHH_09", "ChildinHH_1017", "ChildinHH_None"]],
+    on="SessionId",
+    how="left"
+)
+
+df = df[df["ChildinHH_None"] == 0]
+```
+
+```{python}
+counts = df.groupby('10to17_hh')['SessionId'].nunique()
+percentages1 = counts / counts.sum() * 100
+
+counts = df.groupby('0to9_hh')['SessionId'].nunique()
+percentages2 = counts / counts.sum() * 100
+
+counts = df.groupby('ChildinHH_017')['SessionId'].nunique()
+percentages3 = counts / counts.sum() * 100
+
+counts = df.groupby('ChildinHH_09')['SessionId'].nunique()
+percentages4 = counts / counts.sum() * 100
+
+counts = df.groupby('ChildinHH_1017')['SessionId'].nunique()
+percentages5 = counts / counts.sum() * 100
+
+percentages1
+percentages2
+percentages3
+percentages4
+percentages5
+```
+
+```{python}
+counts = df.groupby('Num_0_17')['SessionId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary = pd.DataFrame({
+    'Number of Children (Age 0–17) in a Family': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.round(2)
+})
+
+counts = df.groupby('Num_0_9')['SessionId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary1 = pd.DataFrame({
+    'Number of Children (Age 0–9) in a Family': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.round(2)
+})
+
+counts = df.groupby('Num_10_17')['SessionId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary2 = pd.DataFrame({
+    'Number of Children (Age 10–17) in a Family': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.round(2)
+})
+
+print(summary)
+print(summary1)
+print(summary2)
+```
+
+###N of people in the HH
+```{python echo=TRUE}
+# Group by age and count unique journeys
+number_HH_member = df.groupby("HousehNumPers")["SessionId"].nunique().reset_index()
+
+# Rename columns
+number_HH_member.columns = ["HousehNumPers", "Number of Persons in a HH"]
+
+# Sort by age (optional)
+number_HH_member = number_HH_member.sort_values("HousehNumPers").reset_index(drop=True)
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Set seaborn style
+sns.set(style="whitegrid")
+
+# Create bar plot
+plt.figure(figsize=(8, 4))
+sns.barplot(data=number_HH_member, x="HousehNumPers", y="Number of Persons in a HH", color="#4C72B0")
+
+# Add labels and title
+plt.title("Number of Persons in a HH (total)", fontsize=14)
+plt.xlabel("Persons in a Household")
+plt.ylabel("Count")
+plt.xticks(rotation=0)
+plt.tight_layout()
+
+# Show plot
+plt.show()
+```
+
+```{python echo=TRUE}
+# Group by age and count unique journeys
+number_HH_member = df.groupby("Num_0_9")["SessionId"].nunique().reset_index()
+
+# Rename columns
+number_HH_member.columns = ["Num_0_9", "Number of Persons U10 in a HH"]
+
+# Sort by age (optional)
+number_HH_member = number_HH_member.sort_values("Num_0_9").reset_index(drop=True)
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Set seaborn style
+sns.set(style="whitegrid")
+
+# Create bar plot
+plt.figure(figsize=(8, 4))
+sns.barplot(data=number_HH_member, x="Num_0_9", y="Number of Persons U10 in a HH", color="#4C72B0")
+
+# Add labels and title
+plt.title("Number of Children under 10y in a HH (total)", fontsize=14)
+plt.xlabel("Children in a Household")
+plt.ylabel("Count")
+plt.xticks(rotation=0)  
+plt.tight_layout()
+
+# Show plot
+plt.show()
+```
+
+# Travel time in minutes ('Time of end of the journey'-'Time of start of the journey')
+```{python echo=FALSE}
+# Calculate travel time in minutes
+df["TravelTimeMinutes"] = df["JEndTimeMsm"] - df["JStartTimeMsm"]
+
+# Display first few rows
+print(df[["JStartTimeMsm", "JEndTimeMsm", "TravelTimeMinutes"]].head())
+```
+
+#	Purpose of journey (the purpose of the longest staying time of the journey)
+```{python echo=FALSE}
+# Define categories for PrimTargetPurp
+purpose_mapping = {
+    **dict.fromkeys([11], "work"),
+    **dict.fromkeys([12, 13, 14], "education"),
+    **dict.fromkeys([20, 23, 31, 32, 33], "errands and shopping"),
+    **dict.fromkeys([21, 22], "chauffeuring"),
+    **dict.fromkeys([25, 38, 42, 43, 45, 47, 49], "leisure and social activities"),
+}
+
+# Filter first
+df = df[df["PrimTargetPurp"].isin(purpose_mapping.keys())]
+
+# Then map categories (no need for fillna anymore)
+df["PrimTargetPurp_Cat"] = df["PrimTargetPurp"].map(purpose_mapping)
+
+
+# Display first few rows
+print(df[["PrimTargetPurp", "PrimTargetPurp_Cat"]].head(30))
+```
+```{python}
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+categories = df["PrimTargetPurp_Cat"].unique()
+
+for cat in categories:
+    plt.figure(figsize=(8, 4))
+    subset = df[df["PrimTargetPurp_Cat"] == cat]
+    
+    sns.histplot(subset["TravelTimeMinutes"].dropna(), bins=30, kde=False)
+    plt.title(f"Distribution of Tour Duration for each Purpose: {cat}")
+    plt.xlabel("Tour Duration (minutes)")
+    plt.ylabel("Count")
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.show()
+```
+
+# The number of children in the household and the age group of the oldest children
+```{python echo=FALSE}
+# Create "Numchld" column: Number of children in the household
+df["NumChld"] = df["HousehNumPers"] - df["HousehNumAdults"]
+
+# Create "AgeOldchld" column: Age category of the oldest child
+#df["AgeOldChld"] = df["PartyNum1017"].apply(lambda x: "10to17" if x >= 1 else "0to9")
+
+# Create "Chldu6" column: Number of children under age 6 in the household
+df["Chldu6"] = df["HousehNumPers"] - df["HousehNumPersO6"]
+
+# Display first few rows
+print(df[["HousehNumPers", "HousehNumAdults", "FamNumPersO6", "NumChld","PartyNumu10", "PartyNum1017", "Chldu6"]].head(10))
+```
+
+# Household type (single-adult households, dual-adult households, and multi-adult households)
+```{python, echo=FALSE}
+# Create "HhStruct" column: Household structure categories
+def categorize_hh(pos):
+    if pos == 10:
+        return "Single-adult household"
+    elif pos in [11, 12]:
+        return "Couple household"
+    else:  # Includes 20 and NaN values
+        return "Multi-adult household"
+
+df["HhStruct"] = df["PosInFamily"].apply(categorize_hh)
+
+# Display first few rows
+print(df[["PosInFamily", "HhStruct"]].head(10))
+```
+
+#	Dummy for men/women in a couple, or younger/older
+```{python, echo=FALSE}
+# Dummies for position in couple
+df["OlderInCouple"] = df["PosInFamily"] == 11
+df["YoungerInCouple"] = df["PosInFamily"] == 12
+
+# Dummies for gender
+df["IsMan"] = df["RespSex"] == 1
+df["IsWoman"] = df["RespSex"] == 2
+
+df["OlderInCouple"] = df["OlderInCouple"].astype(int)
+df["YoungerInCouple"] = df["YoungerInCouple"].astype(int)
+df["IsMan"] = df["IsMan"].astype(int)
+df["IsWoman"] = df["IsWoman"].astype(int)
+
+print(df[["PosInFamily", "RespSex", "OlderInCouple", "YoungerInCouple", "IsMan", "IsWoman"]].head(10))
+```
+```{python, echo=FALSE}
+df = df[df['PosInFamily'] != 20]
+```
+
+#	Dummy for work status in a couple 
+```{python, echo=FALSE}
+# Define function to classify occupation
+def is_worker(code):
+    return code in [210, 211, 221, 222]
+
+# Apply the function to create the dummy
+df["IsWorker"] = df["RespPrimOcc"].apply(is_worker).astype(int)
+
+# Optional: create IsNonWorker dummy
+df["IsNonWorker"] = 1 - df["IsWorker"]
+
+# Preview result
+print(df[["RespPrimOcc", "IsWorker", "IsNonWorker"]].head(10))
+```
+```{python, echo=FALSE}
+# Count unique SessionIds by IsWorker status
+worker_session_counts = df.groupby("IsWorker")["SessionId"].nunique()
+
+# Convert to proportions
+worker_session_proportions = worker_session_counts / worker_session_counts.sum()
+
+# Display
+print(worker_session_proportions)
+```
+
+#	Single-adult/ multi-adult categorical variable  
+```{python, echo=FALSE}
+# Create dummy for single-adult households
+df["SingleAdult"] = df["HousehNumAdults"].apply(lambda x: 1 if x == 1 else 0)
+
+# Optionally: create the inverse dummy for multi-adult households
+df["MultiAdult"] = 1 - df["SingleAdult"]
+
+# Preview the result
+print(df[["HousehNumAdults", "SingleAdult", "MultiAdult"]].head(10))
+```
+# Check if the value of children traveler differs between trip level and journey level 0-9
+```{python,  echo=FALSE}
+# Group by JourneyId and TurId to see how PartyNumu10 varies
+trip_level = df.groupby("TurId")["PartyNumu10"].first().reset_index()
+journey_level = df.groupby("JourneyId")["PartyNumu10"].nunique().reset_index()
+
+# Find JourneyIds where PartyNumu10 has more than one unique value across trips
+journey_level_diff = journey_level[journey_level["PartyNumu10"] > 1]
+
+# Merge back to original data if you want to inspect those JourneyIds
+diff_details = df[df["JourneyId"].isin(journey_level_diff["JourneyId"])]
+
+# Print summary
+print(f"Number of journeys with inconsistent PartyNumu10 values: {len(journey_level_diff)}")
+print(diff_details[["JourneyId", "TurId", "PartyNumu10"]].sort_values(["JourneyId", "TurId"]).head(20))
+```
+# Check if the value of children traveler differs between trip level and journey level 10-17
+```{python,  echo=FALSE}
+# Group by JourneyId and TurId to see how PartyNumu10 varies
+trip_level = df.groupby("TurId")["PartyNum1017"].first().reset_index()
+journey_level = df.groupby("JourneyId")["PartyNum1017"].nunique().reset_index()
+
+# Find JourneyIds where PartyNumu10 has more than one unique value across trips
+journey_level_diff = journey_level[journey_level["PartyNum1017"] > 1]
+
+# Merge back to original data if you want to inspect those JourneyIds
+diff_details = df[df["JourneyId"].isin(journey_level_diff["JourneyId"])]
+
+# Print summary
+print(f"Number of journeys with inconsistent PartyNum1017 values: {len(journey_level_diff)}")
+print(diff_details[["JourneyId", "TurId", "PartyNum1017"]].sort_values(["JourneyId", "TurId"]).head(20))
+```
+# Check if the value of children traveler differs between trip level and journey level  0-17
+```{python}
+df["PartyNum017"] = df["PartyNumu10"].fillna(0) + df["PartyNum1017"].fillna(0)
+```
+
+```{python,  echo=FALSE}
+# Group by JourneyId and TurId to see how PartyNumu10 varies
+trip_level = df.groupby("TurId")["PartyNum017"].first().reset_index()
+journey_level = df.groupby("JourneyId")["PartyNum017"].nunique().reset_index()
+
+# Find JourneyIds where PartyNumu10 has more than one unique value across trips
+journey_level_diff = journey_level[journey_level["PartyNum017"] > 1]
+
+# Merge back to original data if you want to inspect those JourneyIds
+diff_details = df[df["JourneyId"].isin(journey_level_diff["JourneyId"])]
+
+# Print summary
+print(f"Number of journeys with inconsistent PartyNum017 values: {len(journey_level_diff)}")
+print(diff_details[["JourneyId", "TurId", "PartyNum017"]].sort_values(["JourneyId", "TurId"]).head(20))
+```
+
+# Maximum number of accompanied children 0-17, 0-9, 10-17 per journey
+```{python echo=FALSE}
+# Calculate max of all three child presence columns per JourneyId
+max_children = df.groupby("JourneyId")[
+    ["PartyNum017", "PartyNumu10", "PartyNum1017"]
+].max().reset_index()
+
+# Merge the max values back to the original dataframe
+df = df.merge(max_children, on="JourneyId", suffixes=('', '_max'))
+
+# Preview relevant columns to check
+print(df[[
+    "JourneyId", 
+    "PartyNum017", "PartyNum017_max", 
+    "PartyNumu10", "PartyNumu10_max", 
+    "PartyNum1017", "PartyNum1017_max"
+]].head(10))
+```
+```{python}
+bins = [-1, 0, 1, 2, 3, 4, 5, float('inf')]
+labels = ['0', '1', '2', '3', '4', '5', '5+']
+df['PartyNumu10_Category'] = pd.cut(df['PartyNumu10'], bins=bins, labels=labels, right=False)
+
+chld_counts = df['PartyNumu10_Category'].value_counts().sort_index()
+
+plt.figure(figsize=(8, 4))
+sns.barplot(x=chld_counts.index.astype(str), y=chld_counts.values, color='skyblue')
+plt.xlabel("Maximum Number of Children")
+plt.ylabel("Count")
+plt.title("Distribution of Maximum Number of Accompanied Children Under 10y Per Journey")
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+bins = [-1, 0, 1, 2, 3, 4, 5, float('inf')]
+labels = ['0', '1', '2', '3', '4', '5', '5+']
+df['PartyNumu1017_Category'] = pd.cut(df['PartyNum1017'], bins=bins, labels=labels, right=False)
+
+chld_counts1 = df['PartyNumu1017_Category'].value_counts().sort_index()
+
+plt.figure(figsize=(8, 4))
+sns.barplot(x=chld_counts1.index.astype(str), y=chld_counts1.values, color='skyblue')
+plt.xlabel("Maximum Number of Children")
+plt.ylabel("Count")
+plt.title("Distribution of Maximum Number of Accompanied Children 10-17y per Journey")
+plt.tight_layout()
+plt.show()
+```
+```{python}
+bins = [-1, 0, 1, 2, 3, 4, 5, float('inf')]
+labels = ['0', '1', '2', '3', '4', '5', '5+']
+df['PartyNumu017_Category'] = pd.cut(df['PartyNum017'], bins=bins, labels=labels, right=False)
+
+chld_counts2 = df['PartyNumu017_Category'].value_counts().sort_index()
+
+plt.figure(figsize=(8, 4))
+sns.barplot(x=chld_counts2.index.astype(str), y=chld_counts2.values, color='skyblue')
+plt.xlabel("Maximum Number of Children")
+plt.ylabel("Count")
+plt.title("Distribution of Maximum Number of Accompanied Children 0-17y  per Journey")
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+summary_table = pd.DataFrame({
+    'Child Presence Category': chld_counts.index.astype(str),
+    'Count': chld_counts.values,
+    'Percentage': (chld_counts / chld_counts.sum() * 100).round(2)
+})
+
+print(summary_table)
+```
+
+```{python}
+summary_table = pd.DataFrame({
+    'Child Presence Category': chld_counts1.index.astype(str),
+    'Count': chld_counts1.values,
+    'Percentage': (chld_counts1 / chld_counts1.sum() * 100).round(2)
+})
+
+print(summary_table)
+```
+
+```{python}
+summary_table = pd.DataFrame({
+    'Child Presence Category': chld_counts2.index.astype(str),
+    'Count': chld_counts2.values,
+    'Percentage': (chld_counts2 / chld_counts2.sum() * 100).round(2)
+})
+
+print(summary_table)
+```
+
+
+#  Number of accompanied children on a journey under 10y
+```{python echo=FALSE}
+counts = df.groupby('PartyNum017_max')['JourneyId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary = pd.DataFrame({
+    'Number of accompanied children on a journey under 17y': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+summary['Percentage'] = summary['Percentage'].round(2)
+
+counts = df.groupby('PartyNumu10_max')['JourneyId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary1 = pd.DataFrame({
+    'Number of accompanied children on a journey 0-9': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+summary1['Percentage'] = summary1['Percentage'].round(2)
+
+counts = df.groupby('PartyNum1017_max')['JourneyId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary2 = pd.DataFrame({
+    'Number of accompanied children on a journey 10-17': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+summary2['Percentage'] = summary2['Percentage'].round(2)
+
+print(summary)
+print(summary1)
+print(summary2)
+```
+
+```{python echo=FALSE}
+# Step 1: Filter journeys where 'maxchldu10' is in the specified list
+high_chilren_journeys = df[df['PartyNum017_max'].isin([6,7,8,9,12,13,20,30,32,34,35,38,79])]['JourneyId'].unique()
+high_chilren_journeys = df[df['PartyNumu10_max'].isin([6,7,8,9,12,13,19,21,30,38])]['JourneyId'].unique()
+high_chilren_journeys = df[df['PartyNum1017_max'].isin([6,8,21,30,79])]['JourneyId'].unique()
+
+# Step 2: Get 'JourneyId', 'PrimTargetPurp', and 'maxchldu10' for those journeys
+high_chilren_purposes = df[df['JourneyId'].isin(high_chilren_journeys)][
+    ['JourneyId', 'PrimTargetPurp', 'PartyNum017_max', 'PartyNumu10_max', 'PartyNum1017_max']
+]
+
+# Optional: Remove duplicates (if JourneyId repeated)
+high_chilren_purposes = high_chilren_purposes.drop_duplicates()
+
+# Step 3: Display results
+print(high_chilren_purposes)
+```
+```{python echo=FALSE}
+exclude_values = [6,7,8,9,12,13,20,30,32,34,35,38,79, 19,21, 79]
+
+df = df[~df['PartyNum017_max'].isin(exclude_values)]
+df = df[~df['PartyNumu10_max'].isin(exclude_values)]
+df = df[~df['PartyNum1017_max'].isin(exclude_values)]
+```
+
+# New variables ActivityTime and TransportDistance
+```{python echo=FALSE}
+# Calculate ActivityTime as TravelTimeMinutes minus SumMin
+df["ActivityTime"] = df["TravelTimeMinutes"] - df["SumMin"]
+
+# Set TransportDistance equal to SumLen
+df["TransportDistance"] = df["SumLen"]
+
+# Check the first few rows
+print(df[["TravelTimeMinutes", "SumMin", "ActivityTime", "TransportDistance"]].head(10))
+```
+# Journey complexity (the number of tours in a journey: single trip or trip chaining)
+```{python,  echo=FALSE}
+output_file = os.path.join(folder_path, "data_before_compression_1.csv")
+
+df["RespAgeSimple"] = pd.to_numeric(df["RespAgeSimple"], errors="coerce")
+
+# Filter to include only rows with RespAgeSimple >= 18
+df_adults = df[df["RespAgeSimple"] >= 23].copy()
+
+# Create "JourneyComplx" column using .map()
+journey_complexity = df_adults.groupby("JourneyId")["TurId"].nunique().map(
+    lambda x: "Trip Chaining" if x > 2 else "Simple Journey"
+)
+
+# Assign directly to avoid merging issues
+df_adults["JourneyComplx"] = df_adults["JourneyId"].map(journey_complexity)
+
+# Save the updated dataset
+df_adults.to_csv(output_file, index=False, encoding="utf-8-sig")
+
+# Display first few rows
+print(df_adults[["JourneyId", "TurId", "JourneyComplx"]].head(10))
+```
+```{python}
+# Plot the histogram
+# Define travel time categories as labels
+bins = [0, 50, 100,150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, float('inf')]
+labels = ['0–50', '50–100', '100–150', '150–200', '200–250', '250–300', '300-350', '350-400', '400-450',
+          '450-500', '500-550', '550-600', '600-650', '650-700', '700-750', '750-800', '800-850', '850-900', '900-950', '950p']
+
+# Assign category
+df_adults['TravelTimeCategory'] = pd.cut(df_adults['TravelTimeMinutes'], bins=bins, labels=labels, right=False)
+
+# Count frequencies
+category_counts = df_adults['TravelTimeCategory'].value_counts().sort_index()
+
+# Plot
+plt.figure(figsize=(8, 4))
+sns.barplot(x=category_counts.index, y=category_counts.values, color='skyblue')
+plt.xlabel("Journey Duration (minutes)")
+plt.ylabel("Count")
+plt.title("Distribution of Journey Duration Categories")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+```
+```{python}
+# Plot the histogram
+# Define travel time categories as labels
+bins = [0, 60, 120, 180, 240, 300, 360, 420, 480, 540, 600, 660, 720, float('inf')]
+labels = ['0–60', '60–120', '120–180', '180–240', '240–300', '300–360',
+          '360–420', '420–480', '480–540', '540–600', '600–660', '660–720', '720+']
+
+# Apply cut
+df_adults['TravelTimeCategory1'] = pd.cut(
+    df_adults['TravelTimeMinutes'], bins=bins, labels=labels, right=False
+)
+
+# Count frequency per category
+category_counts1 = df_adults['TravelTimeCategory1'].value_counts().sort_index()
+
+# Plot
+plt.figure(figsize=(8, 4))
+sns.barplot(x=category_counts1.index, y=category_counts1.values, color='skyblue')
+plt.xlabel("Journey Duration (minutes)")
+plt.ylabel("Count")
+plt.title("Distribution of Journey Duration Categories Under 12h")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+```
+
+#  Number of Journey Types with children under 10y
+```{python echo=FALSE}
+counts = df_adults.groupby('JourneyWithChildren')['JourneyId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary = pd.DataFrame({
+    'Journey Type  with children 0-10y': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+summary['Percentage'] = summary['Percentage'].round(2)
+
+print(summary)
+```
+
+# Type of Journey
+```{python echo=FALSE}
+# Dictionary mapping JourneyType codes to descriptive labels
+journey_type_labels = {
+    11: "Closed journey",
+    12: "Open end",
+    21: "Open start",
+    22: "Fully open"
+}
+
+# Count occurrences of each JourneyType
+counts = df_adults.groupby('JourneyType')['JourneyId'].nunique()
+
+
+# Calculate percentages
+percentages = counts / counts.sum() * 100
+
+# Map numeric codes to descriptive labels
+descriptive_labels = counts.index.map(journey_type_labels)
+
+# Create summary DataFrame
+summary = pd.DataFrame({
+    'Journey Type - starts or ends at home/journey base': descriptive_labels,
+    'Count': counts.values,
+    'Percentage': percentages.round(2).values
+})
+
+# Display the summary
+print(summary)
+```
+```{python}
+# Count unique SessionId
+num_unique_sessions = df_adults["SessionId"].nunique()
+
+# Count unique JourneyId
+num_unique_journeys = df_adults["JourneyId"].nunique()
+
+print("Unique SessionId:", num_unique_sessions)
+print("Unique JourneyId:", num_unique_journeys)
+```
+
+
+```{python}
+df_adults = df_adults[df_adults['JourneyType'] == 11]
+```
+
+
+# Only closed(home-based) journey less than 12h duration
+```{python echo=TRUE}
+# List of variables to plot
+variables = ["TravelTimeMinutes"]
+             
+# Set plot style
+sns.set(style="whitegrid")
+
+# Loop through each variable and create a histogram or countplot
+for var in variables:
+    plt.figure(figsize=(8, 4))
+    
+    if pd.api.types.is_numeric_dtype(df_adults[var]):
+        sns.histplot(df_adults[var].dropna(), kde=False, bins=300)
+        plt.xlim(0, 1200)  # Limit x-axis
+        plt.ylabel("Count")
+    else:
+        sns.countplot(x=var, data=df_adults)
+        plt.xticks(rotation=45, ha='right')
+    
+    plt.title("Tour Counts by Duration", fontsize=14)
+    plt.xlabel("Tour Duration (minutes)", fontsize=12)
+    plt.tight_layout()
+    plt.show()
+```
+
+```{python}
+# Total unique journeys
+total_unique_journeys = df_adults["JourneyId"].nunique()
+
+# Unique journeys over 720
+count_unique_journeys_over720 = df_adults.loc[df_adults["TravelTimeMinutes"] > 720, "JourneyId"].nunique()
+
+# Percentage
+percent_unique_journeys_over720 = round(count_unique_journeys_over720 / total_unique_journeys * 100, 2)
+
+print("Unique JourneyId > 720 minutes:", count_unique_journeys_over720)
+print("Total unique JourneyId:", total_unique_journeys)
+print("Percentage of unique journeys > 720 minutes:", percent_unique_journeys_over720, "%")
+```
+```{python}
+# Count unique SessionId
+num_unique_sessions = df_adults["SessionId"].nunique()
+
+# Count unique JourneyId
+num_unique_journeys = df_adults["JourneyId"].nunique()
+
+print("Unique SessionId:", num_unique_sessions)
+print("Unique JourneyId:", num_unique_journeys)
+```
+
+
+```{python}
+df_adults = df_adults[df_adults["TravelTimeMinutes"] <= 720]
+```
+
+```{python}
+# Count unique SessionId and JourneyId
+unique_sessions = df_adults["SessionId"].nunique()
+unique_journeys = df_adults["JourneyId"].nunique()
+
+print(f"Unique SessionId: {unique_sessions}")
+print(f"Unique JourneyId: {unique_journeys}")
+```
+
+
+```{python}
+# Filter rows with NaN in IncHouseh
+nan_income = df_adults[df_adults["IncHouseh"].isna()]
+
+# Count unique SessionId and JourneyId
+unique_sessions_nan = nan_income["SessionId"].nunique()
+unique_journeys_nan = nan_income["JourneyId"].nunique()
+
+print(f"Unique SessionId with NaN IncHouseh: {unique_sessions_nan}")
+print(f"Unique JourneyId with NaN IncHouseh: {unique_journeys_nan}")
+```
+
+
+```{python}
+#Gross income, thousand DKK per year.
+income = df_adults['IncHouseh'].dropna()
+
+quantiles = income.quantile([0.25, 0.5, 0.75])
+
+plt.figure(figsize=(8, 4))
+sns.histplot(income, kde=True, bins=300, color='skyblue', edgecolor='black')
+plt.title('Tour Counts by Household Income')
+plt.xlabel('Household Income (1000 DKK)')
+plt.ylabel('Count')
+
+for q, val in quantiles.items():
+    plt.axvline(x=val, color='red', linestyle='--', label=f'{int(q*100)}th percentile: {val:.0f}')
+
+handles, labels = plt.gca().get_legend_handles_labels()
+unique_labels = dict(zip(labels, handles))
+plt.legend(unique_labels.values(), unique_labels.keys())
+
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+```
+
+
+```{python}
+df_adults = df_adults.copy()
+df_adults['inc_quant'] = pd.qcut(df_adults['IncHouseh'], q=4, labels=['Q1', 'Q2', 'Q3', 'Q4'])
+
+df_adults = df_adults.dropna(subset=['inc_quant'])
+```
+
+
+```{python}
+# Count unique SessionId by inc_quant
+session_counts = (
+    df_adults.groupby("inc_quant")["SessionId"]
+       .nunique()
+       .reset_index(name="UniqueSessions")
+)
+
+# Add percentage column
+total_sessions = session_counts["UniqueSessions"].sum()
+session_counts["Percentage"] = (session_counts["UniqueSessions"] / total_sessions * 100).round(2)
+
+print(session_counts)
+```
+```{python}
+_, bins = pd.qcut(df_adults['IncHouseh'], q=4, retbins=True, labels=['Q1','Q2','Q3','Q4']))
+
+plt.figure(figsize=(8, 4))
+sns.histplot(income, kde=True, bins=300, color='skyblue', edgecolor='black')
+plt.title('Tour Counts by Household Income')
+plt.xlabel('Household Income (1000 DKK)')
+plt.ylabel('Count')
+
+# Add vertical lines at quartile cut points
+for i, val in enumerate(bins[1:-1], start=1):  # skip min and max
+    plt.axvline(x=val, color='red', linestyle='--', label=f'Q{i} cutoff: {val:.0f}')
+
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+# Unique households with at least one education journey
+edu_sessions = df_adults.loc[df_adults["PrimTargetPurp_Cat"] == "education", "SessionId"].nunique()
+edu_journeys = df_adults.loc[df_adults["PrimTargetPurp_Cat"] == "education", "JourneyId"].nunique()
+
+# Total unique households
+total_sessions = df_adults["SessionId"].nunique()
+total_journeys = df_adults["JourneyId"].nunique()
+
+# Percentage
+percentage_session = (edu_sessions / total_sessions) * 100
+percentage_journeys = (edu_journeys / total_journeys) * 100
+
+print(f"Unique SessionId with education: {edu_sessions}")
+print(f"Total unique SessionId: {total_sessions}")
+print(f"Percentage: {percentage_session:.2f}%")
+
+print(f"Unique JourneyId with education: {edu_journeys}")
+print(f"Total unique JourneyId: {total_journeys}")
+print(f"Percentage: {percentage_journeys:.2f}%")
+```
+```{python}
+df_adults_before = df_adults.copy()
+
+# Check original length
+initial_rows = len(df_adults)
+
+# Drop NAs step by step and count
+df_adults1 = df_adults.dropna(subset=['inc_quant'])
+after_inc = len(df_adults)
+dropped_inc = initial_rows - after_inc
+
+df_adults1 = df_adults.dropna(subset=['HousehNumAdults'])
+after_adults = len(df_adults)
+dropped_adults = after_inc - after_adults
+
+df_adults1 = df_adults.dropna(subset=['IsWorker'])
+after_worker = len(df_adults)
+dropped_worker = after_adults - after_worker
+
+df_adults1 = df_adults.dropna(subset=['OlderInCouple'])
+after_couple = len(df_adults)
+dropped_couple = after_worker - after_couple
+
+total_dropped = initial_rows - after_couple
+
+print("Dropped due to inc_quant:", dropped_inc)
+print("Dropped due to HousehNumAdults:", dropped_adults)
+print("Dropped due to IsWorker:", dropped_worker)
+print("Dropped due to OlderInCouple:", dropped_couple)
+print("Total dropped:", total_dropped)
+print("Remaining rows:", after_couple)
+
+# Count unique IDs after cleaning
+unique_journeys = df_adults["JourneyId"].nunique()
+unique_sessions = df_adults["SessionId"].nunique()
+
+print(f"Unique JourneyId: {unique_journeys}")
+print(f"Unique SessionId: {unique_sessions}")
+
+# Before dropping NAs
+initial_journeys = df_adults_before["JourneyId"].nunique()
+initial_sessions = df_adults_before["SessionId"].nunique()
+
+# After dropping NAs (dt is your cleaned dataset)
+final_journeys = df_adults1["JourneyId"].nunique()
+final_sessions = df_adults1["SessionId"].nunique()
+
+# Differences
+dropped_journeys = initial_journeys - final_journeys
+dropped_sessions = initial_sessions - final_sessions
+
+print("Unique JourneyId before:", initial_journeys)
+print("Unique JourneyId after:", final_journeys)
+print("Dropped JourneyId:", dropped_journeys)
+
+print("Unique SessionId before:", initial_sessions)
+print("Unique SessionId after:", final_sessions)
+print("Dropped SessionId:", dropped_sessions)
+```
+
+
+```{python echo=FALSE}
+# Further filter to keep TravelTimeMinutes less than 1620
+df_closed = df_adults
+
+# Save the  dataset
+folder_path = r"C:\Users\ohdaw\OneDrive - Harvard University\tu_data"
+output_file = os.path.join(folder_path, "data_before_compression_hh_0to9.csv")
+df_closed.to_csv(output_file, index=False, encoding="utf-8-sig")
+```
+
+```{python}
+# File paths
+folder_path = r"C:\Users\ohdaw\OneDrive - Harvard University\tu_data"
+output_file = os.path.join(folder_path, "data_before_compression_hh_0to9.csv")
+
+# Load data
+df = pd.read_csv(output_file)
+
+# Group by PrimTargetPurp_Cat and count unique JourneyId
+unique_counts = df.groupby("PrimTargetPurp_Cat")["JourneyId"].nunique().reset_index()
+
+# Rename columns for clarity
+unique_counts.columns = ["PrimTargetPurp_Cat", "UniqueJourneyCount"]
+
+print(unique_counts)
+```
+```{python}
+# File paths
+folder_path = r"C:\Users\ohdaw\OneDrive - Harvard University\tu_data"
+output_file = os.path.join(folder_path, "data_before_compression_hh_0to9.csv")
+
+# Load data
+df = pd.read_csv(output_file)
+
+# Group by PrimTargetPurp_Cat and count unique JourneyId
+unique_counts = df.groupby("PrimTargetPurp_Cat")["SessionId"].nunique().reset_index()
+
+# Rename columns for clarity
+unique_counts.columns = ["PrimTargetPurp_Cat", "UniqueSessionCount"]
+
+print(unique_counts)
+```
+
+
+# Reduce the dimension (multiple rows in tour level in each journey -> single row for a journey)
+```{python echo=FALSE}
+# Define file paths
+folder_path = r"C:\Users\ohdaw\OneDrive - Harvard University\tu_data"
+#data_file = os.path.join(folder_path, "data_before_compression.csv")  # Use latest dataset
+output_file = os.path.join(folder_path, "data_reduced_hh_0to9.csv")
+
+# Load the dataset
+#dft = pd.read_csv(data_file, encoding="utf-8-sig")
+#dft["RespAgeSimple"] = pd.to_numeric(dft["RespAgeSimple"], errors="coerce")
+
+# Filter to include only rows with variables
+#dft["ActivityTime"] = dft["TravelTimeMinutes"] - dft["SumMin"]
+#dft["TransportDistance"] = dft["SumLen"]
+
+#max_chld = dft.groupby("JourneyId")["PartyNumu10"].transform("max")
+#dft["maxchldu10"] = max_chld
+
+#dft["ActivityTime"] = dft["TravelTimeMinutes"] - dft["SumMin"]
+#dft["TransportDistance"] = dft["SumLen"]
+#dft["maxchldu10"] = dft.groupby("JourneyId")["PartyNumu10"].transform("max")
+
+df_closed_adults = df_closed[df_closed["RespAgeSimple"] >= 23].copy()
+
+# Reduce to one row per JourneyId
+df_reduced = df_closed_adults.groupby("JourneyId").agg({
+    "TurId": "first", 
+    "SessionId": "first", 
+    "JourneyWithChildren": "first", 
+    "PrimMode": "first", 
+    "primode_cat" : "first", 
+    "JStartTimeMsm": "first", 
+    "JEndTimeMsm": "first", 
+    "TravelTimeMinutes": "first", 
+    "SumMin": "first", 
+    "SumLen": "first", 
+    "ActivityTime": "first", 
+    "TransportDistance": "first", 
+    "PrimTargetPurp": "first", 
+    "PrimTargetPurp_Cat": "first", 
+    "IncHouseh": "first",
+    "inc_quant": "first",
+    "FamNumPers": "first",  
+    "FamNumAdults": "first",  
+    "HousehNumPers": "first",  
+    "HousehNumAdults": "first",  
+    "HousehNumPersO6": "first", 
+    "FamNumPersO6": "first", 
+    "NumChld": "first", 
+    "PartyNum1017": "first", 
+    "PartyNumu10": "first",  
+    "PartyNum1017": "first", 
+    "Chldu6": "first", 
+    "PosInFamily": "first",
+    "SingleAdult": "first",
+    "MultiAdult": "first",
+    "OlderInCouple": "first",
+    "YoungerInCouple": "first",
+    "IsMan": "first",
+    "IsWoman": "first",
+    "RespSex": "first",
+    "RespAgeSimple": "first",
+    "AgeSimple": "first",
+    "RespPrimOcc": "first",
+    "IsWorker": "first",
+    "IsNonWorker": "first",
+    "JourneyComplx": "first",
+    "ChildPresence_017": "first", #Binary: whether chld is on a journey
+    "ChildPresence_09": "first",
+    "ChildPresence_1017": "first",
+    "PartyNum017_max": "first", #Continuous: The number of chld on a journey
+    "PartyNumu10_max": "first",
+    "PartyNum1017_max": "first",
+    "ChildinHH_017": "first", #Binary: whether the age group in hh
+    "ChildinHH_09": "first",
+    "ChildinHH_1017": "first",
+    "Num_0_17": "first",  #Continuous: The number of age group in hh
+    "Num_0_9": "first",
+    "Num_10_17": "first"
+}).reset_index()
+
+# Assign Journey Complexity
+df_reduced["JourneyComplx"] = df_reduced["JourneyId"].map(journey_complexity)
+
+# Save the reduced dataset
+df_reduced.to_csv(output_file, index=False, encoding="utf-8-sig")
+
+# Display first few rows
+print(df_reduced.head(30))
+```
+```{python}
+folder_path = r"C:\Users\ohdaw\OneDrive - Harvard University\tu_data"
+output_file = os.path.join(folder_path, "data_reduced_hh_0to9.csv")
+output_file_no_edu = os.path.join(folder_path, "data_reduced_hh_0to9_no_edu1.csv")
+
+# Load data
+df = pd.read_csv(output_file)
+
+# Remove rows where PrimTargetPurp_Cat is education
+df_no_edu = df[df["PrimTargetPurp_Cat"] != "education"]
+
+# Save new dataset
+df_no_edu.to_csv(output_file_no_edu, index=False)
+```
+
+```{python}
+counts = df_no_edu.groupby('PrimTargetPurp_Cat')['JourneyId'].nunique().sort_index()
+percentages = df_no_edu['PrimTargetPurp_Cat'].value_counts(normalize=True).sort_index() * 100
+
+purpose_summary = pd.DataFrame({
+    'PrimTargetPurp_Cat': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+purpose_summary['Percentage'] = purpose_summary['Percentage'].round(2)
+
+purpose_summary['Purpose'] = purpose_summary['PrimTargetPurp_Cat']
+
+purpose_summary = purpose_summary[['Purpose', 'Count', 'Percentage']]
+
+print(purpose_summary)
+```
+
+```{python}
+counts = df_no_edu.groupby('PrimTargetPurp_Cat')['SessionId'].nunique().sort_index()
+percentages = df_no_edu['PrimTargetPurp_Cat'].value_counts(normalize=True).sort_index() * 100
+
+purpose_summary = pd.DataFrame({
+    'PrimTargetPurp_Cat': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+purpose_summary['Percentage'] = purpose_summary['Percentage'].round(2)
+
+purpose_summary['Purpose'] = purpose_summary['PrimTargetPurp_Cat']
+
+purpose_summary = purpose_summary[['Purpose', 'Count', 'Percentage']]
+
+print(purpose_summary)
+```
+```{python}
+# Number of categories each household appears in
+household_purposes = df_no_edu.groupby("SessionId")["PrimTargetPurp_Cat"].nunique()
+
+# How many households are in multiple categories
+multi_category = (household_purposes > 1).sum()
+
+print(f"Households with trips in multiple categories: {multi_category}")
+print(f"Total households: {df_no_edu['SessionId'].nunique()}")
+```
+
+
+
+```{python}
+# Count unique SessionId
+num_unique_sessions = df_no_edu["SessionId"].nunique()
+
+# Count unique JourneyId
+num_unique_journeys = df_no_edu["JourneyId"].nunique()
+
+print("Unique SessionId:", num_unique_sessions)
+print("Unique JourneyId:", num_unique_journeys)
+```
+
+```{python}
+# Count unique SessionId
+num_unique_sessions = df_closed["SessionId"].nunique()
+
+# Count unique JourneyId
+num_unique_journeys = df_closed["JourneyId"].nunique()
+
+print("Unique SessionId:", num_unique_sessions)
+print("Unique JourneyId:", num_unique_journeys)
+```
+```{python}
+# Count unique SessionId
+num_unique_sessions = df_adults["SessionId"].nunique()
+
+# Count unique JourneyId
+num_unique_journeys = df_adults["JourneyId"].nunique()
+
+print("Unique SessionId:", num_unique_sessions)
+print("Unique JourneyId:", num_unique_journeys)
+```
+
+
+
+
+# 1. dataset with children 0-17, journey with children 0-9
+# 2. dataset with children 0-9, journey with children 0-9

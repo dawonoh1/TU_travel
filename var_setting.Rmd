@@ -1,0 +1,391 @@
+---
+title: "variable setting"
+author: "dawon"
+date: "2025-03-24"
+output: html_document
+---
+
+#Iport packages
+```{python setup, include=FALSE} 
+import pandas as pd
+import os
+```
+
+#Import existing dataset
+```{python, include=FALSE}
+# Define file paths
+folder_path = r"C:\Users\ohdaw\OneDrive - Harvard University\tu_data"
+file_path = os.path.join(folder_path, "data_classified.csv")
+#output_path = os.path.join(folder_path, ".csv")
+
+# Load dataset
+dT = pd.read_csv(file_path, encoding="utf-8-sig")
+```
+
+#Filter out only adult respondants
+```{python include=FALSE}
+# Ensure RespAgeSimple is numeric
+dT["RespAgeSimple"] = pd.to_numeric(dT["RespAgeSimple"], errors="coerce")
+
+# Filter to include only rows with RespAgeSimple >= 18
+df = dT[dT["RespAgeSimple"] >= 18].copy()
+
+# Check the result
+df.head()
+```
+
+###N of people in the HH
+```{python echo=TRUE}
+# Group by age and count unique journeys
+number_HH_member = df.groupby("HousehNumPers")["SessionId"].nunique().reset_index()
+
+# Rename columns
+number_HH_member.columns = ["HousehNumPers", "Number of Persons in a HH"]
+
+# Sort by age (optional)
+number_HH_member = number_HH_member.sort_values("HousehNumPers").reset_index(drop=True)
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Set seaborn style
+sns.set(style="whitegrid")
+
+# Create bar plot
+plt.figure(figsize=(10, 6))
+sns.barplot(data=number_HH_member, x="HousehNumPers", y="Number of Persons in a HH", color="#4C72B0")
+
+# Add labels and title
+plt.title("Number of Persons in a HH (total)", fontsize=14)
+plt.xlabel("HH")
+plt.ylabel("Number of Persons")
+plt.xticks(rotation=45)  
+plt.tight_layout()
+
+# Show plot
+plt.show()
+```
+# Filter out 10-84 => Persons uner 10 / over 84
+```{python include=FALSE}
+df['HousehNumPersU10'] = df['HousehNumPers'] - df['HousehNumPers1084']
+```
+
+```{python echo=TRUE}
+# Group by age and count unique journeys
+number_HH_member = df.groupby("HousehNumPersU10")["SessionId"].nunique().reset_index()
+
+# Rename columns
+number_HH_member.columns = ["HousehNumPersU10", "Number of Persons U10 in a HH"]
+
+# Sort by age (optional)
+number_HH_member = number_HH_member.sort_values("HousehNumPers").reset_index(drop=True)
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Set seaborn style
+sns.set(style="whitegrid")
+
+# Create bar plot
+plt.figure(figsize=(10, 6))
+sns.barplot(data=number_HH_member, x="HousehNumPersU10", y="Number of Persons U10 in a HH", color="#4C72B0")
+
+# Add labels and title
+plt.title("Number of Persons U10 in a HH (total)", fontsize=14)
+plt.xlabel("HH")
+plt.ylabel("Number of Persons")
+plt.xticks(rotation=45)  
+plt.tight_layout()
+
+# Show plot
+plt.show()
+```
+```{python include=FALSE}
+df = df[df['HousehNumPersU10'] > 0]
+```
+
+# Travel time in minutes ('Time of end of the journey'-'Time of start of the journey')
+```{python echo=FALSE}
+# Calculate travel time in minutes
+df["TravelTimeMinutes"] = df["JEndTimeMsm"] - df["JStartTimeMsm"]
+
+# Display first few rows
+print(df[["JStartTimeMsm", "JEndTimeMsm", "TravelTimeMinutes"]].head())
+```
+
+#	Purpose of journey (the purpose of the longest staying time of the journey)
+```{python echo=FALSE}
+# Define categories for PrimTargetPurp
+purpose_mapping = {
+    1: "home residence",
+    **dict.fromkeys([11, 50, 52, 53], "work and business"),
+    **dict.fromkeys([12, 13, 14], "education"),
+    **dict.fromkeys([20, 23, 31, 32, 33], "errands and shopping"),
+    **dict.fromkeys([21, 22], "chauffeuring"),
+    **dict.fromkeys([25, 38, 42, 43, 45, 47, 49], "leisure and social activities"),
+}
+
+# Filter first
+df = df[df["PrimTargetPurp"].isin(purpose_mapping.keys())]
+
+# Then map categories (no need for fillna anymore)
+df["PrimTargetPurp_Cat"] = df["PrimTargetPurp"].map(purpose_mapping)
+
+
+# Display first few rows
+print(df[["PrimTargetPurp", "PrimTargetPurp_Cat"]].head(30))
+```
+# The number of children in the household and the age group of the oldest children
+```{python echo=FALSE}
+# Create "Numchld" column: Number of children in the household
+df["NumChld"] = df["FamNumPers"] - df["FamNumAdults"]
+
+# Create "AgeOldchld" column: Age category of the oldest child
+df["AgeOldChld"] = df["PartyNum1017"].apply(lambda x: "10to17" if x >= 1 else "0to9")
+
+# Create "Chldu6" column: Number of children under age 6 in the household
+df["Chldu6"] = df["FamNumPers"] - df["FamNumPersO6"]
+
+# Display first few rows
+print(df[["FamNumPers", "FamNumAdults", "NumChld","PartyNumu10", "PartyNum1017", "AgeOldChld", "Chldu6"]].head(10))
+```
+# Household type (single-adult households, dual-adult households, and multi-adult households)
+```{python, echo=FALSE}
+# Create "HhStruct" column: Household structure categories
+def categorize_hh(pos):
+    if pos == 10:
+        return "Single-adult household"
+    elif pos in [11, 12]:
+        return "Couple household"
+    else:  # Includes 20 and NaN values
+        return "Multi-adult household"
+
+df["HhStruct"] = df["PosInFamily"].apply(categorize_hh)
+
+# Display first few rows
+print(df[["PosInFamily", "HhStruct"]].head(30))
+```
+```{python, echo=FALSE}
+df = df[df['PosInFamily'] != 20]
+```
+
+#	Dummy for men/women in a couple, or younger/older
+```{python, echo=FALSE}
+# Dummies for position in couple
+df["OlderInCouple"] = df["PosInFamily"] == 11
+df["YoungerInCouple"] = df["PosInFamily"] == 12
+
+# Dummies for gender
+df["IsMan"] = df["RespSex"] == 1
+df["IsWoman"] = df["RespSex"] == 2
+
+df["OlderInCouple"] = df["OlderInCouple"].astype(int)
+df["YoungerInCouple"] = df["YoungerInCouple"].astype(int)
+df["IsMan"] = df["IsMan"].astype(int)
+df["IsWoman"] = df["IsWoman"].astype(int)
+
+print(df[["PosInFamily", "RespSex", "OlderInCouple", "YoungerInCouple", "IsMan", "IsWoman"]].head(10))
+```
+#	Dummy for work status in a couple 
+```{python, echo=FALSE}
+# Define function to classify occupation
+def is_worker(code):
+    return code in [210, 211, 221, 222]
+
+# Apply the function to create the dummy
+df["IsWorker"] = df["RespPrimOcc"].apply(is_worker).astype(int)
+
+# Optional: create IsNonWorker dummy
+df["IsNonWorker"] = 1 - df["IsWorker"]
+
+# Preview result
+print(df[["RespPrimOcc", "IsWorker", "IsNonWorker"]].head(10))
+```
+```{python, echo=FALSE}
+# Count unique SessionIds by IsWorker status
+worker_session_counts = df.groupby("IsWorker")["SessionId"].nunique()
+
+# Convert to proportions
+worker_session_proportions = worker_session_counts / worker_session_counts.sum()
+
+# Display
+print(worker_session_proportions)
+```
+
+#	Single-adult/ multi-adult categorical variable  
+```{python, echo=FALSE}
+# Create dummy for single-adult households
+df["SingleAdult"] = df["FamNumAdults"].apply(lambda x: 1 if x == 1 else 0)
+
+# Optionally: create the inverse dummy for multi-adult households
+df["MultiAdult"] = 1 - df["SingleAdult"]
+
+# Preview the result
+print(df[["FamNumAdults", "SingleAdult", "MultiAdult"]].head(10))
+```
+# Check if the value of PartyNumu10 differs between trip level and journey level
+```{python,  echo=FALSE}
+# Group by JourneyId and TurId to see how PartyNumu10 varies
+trip_level = df.groupby("TurId")["PartyNumu10"].first().reset_index()
+journey_level = df.groupby("JourneyId")["PartyNumu10"].nunique().reset_index()
+
+# Find JourneyIds where PartyNumu10 has more than one unique value across trips
+journey_level_diff = journey_level[journey_level["PartyNumu10"] > 1]
+
+# Merge back to original data if you want to inspect those JourneyIds
+diff_details = df[df["JourneyId"].isin(journey_level_diff["JourneyId"])]
+
+# Print summary
+print(f"Number of journeys with inconsistent PartyNumu10 values: {len(journey_level_diff)}")
+print(diff_details[["JourneyId", "TurId", "PartyNumu10"]].sort_values(["JourneyId", "TurId"]).head(20))
+```
+# Maximum number of accompanied children under 10 per journey
+```{python echo=FALSE}
+# Calculate maximum PartyNumu10 for each JourneyId
+max_party = df.groupby("JourneyId")["PartyNumu10"].max().reset_index()
+
+# Rename column for clarity
+max_party.rename(columns={"PartyNumu10": "maxchldu10"}, inplace=True)
+
+# Merge back into the main dataframe
+df = df.merge(max_party, on="JourneyId", how="left")
+
+# Preview the result
+print(df[["JourneyId", "PartyNumu10", "maxchldu10"]].head(10))
+```
+```{python}
+# Plot the histogram
+bins = [-1, 0, 1, 2, 3, 4, 5, float('inf')]
+labels = ['0', '1', '2', '3', '4', '5', '5+']
+
+df['maxchldu10Category'] = pd.cut(df['maxchldu10'], bins=bins, labels=labels, right=False)
+
+chld_counts = df['maxchldu10Category'].value_counts().sort_index()
+
+df['maxchldu10Category'] = pd.cut(
+    df['maxchldu10'], bins=bins, labels=labels, right=False
+    )
+chld_counts = df['maxchldu10Category'].value_counts().sort_index()
+
+plt.figure(figsize=(8, 4))
+sns.barplot(x=chld_counts.index, y=chld_counts.values, color='skyblue')
+plt.xlabel("Maximum number of accompanied children under 10 per journey")
+plt.ylabel("Count")
+plt.title("Distribution of Maximum Number of Accompanied Children Under 10 per Journey")
+plt.tight_layout()
+plt.show()
+```
+
+# New variables ActivityTime and TransportDistance
+```{python echo=FALSE}
+# Calculate ActivityTime as TravelTimeMinutes minus SumMin
+df["ActivityTime"] = df["TravelTimeMinutes"] - df["SumMin"]
+
+# Set TransportDistance equal to SumLen
+df["TransportDistance"] = df["SumLen"]
+
+# Check the first few rows
+print(df[["TravelTimeMinutes", "SumMin", "ActivityTime", "TransportDistance"]].head(10))
+```
+
+# Journey complexity (the number of tours in a journey: single trip or trip chaining)
+```{python,  echo=FALSE}
+# Create "JourneyComplx" column using .map()
+journey_complexity = df.groupby("JourneyId")["TurId"].nunique().map(
+    lambda x: "Trip Chaining" if x > 2 else "Simple Journey"
+)
+
+# Assign directly to avoid merging issues
+df["JourneyComplx"] = df["JourneyId"].map(journey_complexity)
+
+# Display first few rows
+print(df[["JourneyId", "TurId", "JourneyComplx"]].head(10))
+```
+
+# Only home-based journey less than 27h duration
+```{python echo=FALSE}
+# Filter to keep only Closed journeys (JourneyType == 11)
+df_closed = df[df["JourneyType"] == 11]
+
+# Further filter to keep TravelTimeMinutes less than 1620
+df_closed = df_closed[df_closed["TravelTimeMinutes"] < 1620]
+
+# Check the filtered dataframe
+print(df_closed[["JourneyType", "TravelTimeMinutes"]].head())
+
+# Save the  dataset
+folder_path = r"C:\Users\ohdaw\OneDrive - Harvard University\tu_data"
+output_file = os.path.join(folder_path, "data_before_compression.csv")
+df_closed.to_csv(output_file, index=False, encoding="utf-8-sig")
+```
+
+# Reduce the dimension (multiple rows in tour level in each journey -> single row for a journey)
+```{python echo=FALSE}
+# Define file paths
+folder_path = r"C:\Users\ohdaw\OneDrive - Harvard University\tu_data"
+data_file = os.path.join(folder_path, "data_before_compression.csv")  # Use latest dataset
+output_file = os.path.join(folder_path, "data_reduced.csv")
+
+# Load the dataset
+dft = pd.read_csv(data_file, encoding="utf-8-sig")
+
+dft["RespAgeSimple"] = pd.to_numeric(dft["RespAgeSimple"], errors="coerce")
+
+# Filter to include only rows with variables
+dft["ActivityTime"] = dft["TravelTimeMinutes"] - dft["SumMin"]
+dft["TransportDistance"] = dft["SumLen"]
+
+max_chld = dft.groupby("JourneyId")["PartyNumu10"].transform("max")
+dft["maxchldu10"] = max_chld
+
+dft["ActivityTime"] = dft["TravelTimeMinutes"] - dft["SumMin"]
+dft["TransportDistance"] = dft["SumLen"]
+dft["maxchldu10"] = dft.groupby("JourneyId")["PartyNumu10"].transform("max")
+
+df_adults = dft[dft["RespAgeSimple"] >= 18].copy()
+
+# Reduce to one row per JourneyId
+df_reduced = df_adults.groupby("JourneyId").agg({
+    "TurId": "first", 
+    "JourneyWithChildren": "first", 
+    "primode_cat" : "first", 
+    "JStartTimeMsm": "first", 
+    "JEndTimeMsm": "first", 
+    "TravelTimeMinutes": "first", 
+    "SumMin": "first", 
+    "ActivityTime": "first", 
+    "TransportDistance": "first", 
+    "PrimTargetPurp": "first", 
+    "PrimTargetPurp_Cat": "first", 
+    "HousehNumPers": "first",  
+    "HousehNumAdults": "first",  
+    "NumChld": "first", 
+    "PartyNumu10": "first",  
+    "PartyNum1017": "first", 
+    "AgeOldChld": "first",  
+    "Chldu6": "first", 
+    "HousehNumPersU10": "first", 
+    "maxchldu10": "first", 
+    "PosInFamily": "first",
+    "SingleAdult": "first",
+    "MultiAdult": "first",
+    "OlderInCouple": "first",
+    "YoungerInCouple": "first",
+    "IsMan": "first",
+    "IsWoman": "first",
+    "RespSex": "first",
+    "RespAgeSimple": "first",
+    "IsWorker": "first",
+    "IsNonWorker": "first",
+    "JourneyComplx": "first",
+}).reset_index()
+
+# Assign Journey Complexity
+df_reduced["JourneyComplx"] = df_reduced["JourneyId"].map(journey_complexity)
+
+# Save the reduced dataset
+df_reduced.to_csv(output_file, index=False, encoding="utf-8-sig")
+
+# Display first few rows
+print(df_reduced.head(30))
+```

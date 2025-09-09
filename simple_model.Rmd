@@ -1,0 +1,204 @@
+---
+title: "simple_model"
+author: "dawon"
+date: "2025-03-26"
+output: html_document
+---
+
+# Categorical variable transformation
+```{python include=FALSE}
+import pandas as pd
+import biogeme
+import biogeme.version as ver
+
+# Load Data
+file_path = r"C:\Users\ohdaw\OneDrive - Harvard University\tu_data\data_reduced.csv"
+data = pd.read_csv(file_path)
+```
+
+# Formating for parameters
+```{python, include=FALSE}
+# One-hot encode JourneyWithChildren (0/1 format)
+data = pd.get_dummies(data, columns=["JourneyWithChildren"], prefix="JWC")
+
+# Check transformed dataset
+print(data.head())
+```
+
+# Convert categorical variables
+```{python include=FALSE}
+# Convert categorical variables to integer codes
+categorical_columns = ["primode_cat", "PrimTargetPurp_Cat", "AgeOldChld", "HhStruct", "JourneyComplx", "RespSex", "RespAgeSimple"]
+
+for col in categorical_columns:
+    data[col] = data[col].astype("category").cat.codes  # Convert to integer codes
+
+# Convert boolean columns to integers (if applicable)
+bool_columns = ["JWC_0", "JWC_1", "JWC_2"]
+data[bool_columns] = data[bool_columns].astype(int)
+
+# Drop rows with missing values (or impute them if needed)
+data = data.dropna() 
+```
+
+# Import database
+```{python include=FALSE}
+import biogeme.database as db
+import biogeme.biogeme as bio
+from biogeme import models
+from biogeme.expressions import Beta
+from biogeme . expressions import Variable
+
+# Load data into Biogeme database
+database = db.Database("JourneyChoice", data)
+```
+
+# Formatting variable
+```{python include=FALSE}
+primode_cat = Variable ("primode_cat")
+TravelTimeMinutes = Variable ("TravelTimeMinutes")
+PrimTargetPurp_Cat = Variable ("PrimTargetPurp_Cat")
+HousehNumPers = Variable ("HousehNumPers")
+HousehNumAdults = Variable ("HousehNumAdults")
+NumChld = Variable ("NumChld")
+PartyNumu10 = Variable ("PartyNumu10")
+PartyNum1017 = Variable ("PartyNum1017")
+AgeOldChld = Variable ("AgeOldChld")
+Chldu6 = Variable ("Chldu6")
+HhStruct = Variable ("HhStruct")
+JourneyComplx = Variable ("JourneyComplx")
+RespSex = Variable ("RespSex")
+RespAgeSimple = Variable ("RespAgeSimple")
+
+primode_cat = database.DefineVariable("primode_cat","primode_cat")
+TravelTimeMinutes = database.DefineVariable ("TravelTimeMinutes","TravelTimeMinutes")
+PrimTargetPurp_Cat = database.DefineVariable ("PrimTargetPurp_Cat","PrimTargetPurp_Cat")
+HousehNumPers = database.DefineVariable ("HousehNumPers","HousehNumPers")
+HousehNumAdults = database.DefineVariable ("HousehNumAdults","HousehNumAdults")
+NumChld = database.DefineVariable ("NumChld","NumChld")
+PartyNumu10 = database.DefineVariable ("PartyNumu10","PartyNumu10")
+PartyNum1017 = database.DefineVariable ("PartyNum1017","PartyNum1017")
+AgeOldChld = database.DefineVariable ("AgeOldChld","AgeOldChld")
+Chldu6 = database.DefineVariable ("Chldu6","Chldu6")
+HhStruct = database.DefineVariable ("HhStruct","HhStruct")
+JourneyComplx = database.DefineVariable ("JourneyComplx","JourneyComplx")
+RespSex = database.DefineVariable ("RespSex","RespSex")
+RespAgeSimple = database.DefineVariable ("RespAgeSimple","RespAgeSimple")
+```
+
+# Formatting variable
+```{python echo=FALSE}
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Assuming you already have a dataframe called 'data'
+
+# List of variables to plot
+variables = ["primode_cat", "TravelTimeMinutes", "PrimTargetPurp_Cat", "HousehNumPers", "HousehNumAdults", "NumChld", "PartyNumu10", "PartyNum1017", "AgeOldChld", "Chldu6", 
+"HhStruct", "JourneyComplx", "RespSex", "RespAgeSimple"]
+             
+# Set plot style
+sns.set(style="whitegrid")
+
+# Loop through each variable and create a histogram or countplot
+for var in variables:
+    plt.figure(figsize=(8, 4))
+    
+    if pd.api.types.is_numeric_dtype(data[var]):
+        sns.histplot(data[var].dropna(), kde=False, bins=20)
+        plt.ylabel("Count")
+    else:
+        sns.countplot(x=var, data=data)
+        plt.xticks(rotation=45, ha='right')
+    
+    plt.title(f'Distribution of {var}')
+    plt.xlabel(var)
+    plt.tight_layout()
+    plt.show()
+```
+
+# log transforming
+```{python echo=FALSE}
+from biogeme.expressions import Variable, log
+import numpy as np
+
+#Define the symbolic log-transformed variable
+database = db.Database("JourneyChoice", data)
+TravelTimeMinutes = Variable('TravelTimeMinutes')
+database.DefineVariable('TTM_scaled', log(TravelTimeMinutes + 1))
+
+# Log transform TravelTimeMinutes using log1p to handle 0s
+log_ttm = np.log1p(data["TravelTimeMinutes"])
+
+# Plot the histogram
+plt.figure(figsize=(8, 4))
+sns.histplot(log_ttm, bins=30, kde=True)
+plt.xlabel("log(TravelTimeMinutes + 1)")
+plt.ylabel("Count")
+plt.title("Histogram of Log-Transformed Travel Time")
+plt.tight_layout()
+plt.show()
+```
+
+# Parameters to be estimated
+```{python include=FALSE}
+# Define parameters to estimate
+ASC_JWC_0 = Beta('ASC_JWC_0', 0, None, None, 0) 
+ASC_JWC_1 = Beta("ASC_JWC_1", 0, None, None, 0) 
+ASC_JWC_2 = Beta("ASC_JWC_2", 0, None, None, 1) 
+
+B_time = Beta("B_time", 0, None, None, 0)
+```
+
+#  If all alternatives are always available
+```{python include=FALSE}
+data["Avail_JWC_0"] = 1
+data["Avail_JWC_1"] = 1
+data["Avail_JWC_2"] = 1
+
+database = db.Database("JourneyChoice", data)
+Avail_JWC_0 = database.variables["Avail_JWC_0"]
+Avail_JWC_1 = database.variables["Avail_JWC_1"]
+Avail_JWC_2 = database.variables["Avail_JWC_2"]
+```
+
+
+```{python include=FALSE}
+# Define utility functions (JWC_2 is the reference alternative, so its utility is 0)
+V_0 = ASC_JWC_0 + B_time * TravelTimeMinutes 
+V_1 = ASC_JWC_1 +  B_time * TravelTimeMinutes
+V_2 = 0  # Reference alternative
+
+# Associate utilities with alternatives
+V = {0: V_0, 1: V_1, 2: V_2}
+av = {0: Avail_JWC_0, 1: Avail_JWC_1, 2: Avail_JWC_2}
+```
+
+```{python include=FALSE}
+data["Choice"] = data[["JWC_0", "JWC_1", "JWC_2"]].idxmax(axis=1).str[-1].astype(int)
+database = db.Database("JourneyChoice", data)
+Choice = database.variables['Choice']
+```
+
+```{python, echo=TRUE}
+# Define the logit model
+logprob = models.loglogit(V, av, Choice)
+
+# Create the Biogeme object
+biogeme = bio.BIOGEME(database, logprob)
+biogeme.modelName = "JourneyChoiceModel"
+biogeme.calculateNullLoglikelihood (av)
+
+# Estimate the model
+results = biogeme.estimate()
+```
+
+
+```{python, echo=TRUE}
+# Print results
+pandasResrults = results.getEstimatedParameters()
+pandasResrults
+```
+```{python, echo=TRUE}
+print(results)
+```

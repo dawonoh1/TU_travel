@@ -1,0 +1,345 @@
+---
+title: "data-processing"
+author: "dawon"
+date: "2025-03-22"
+output: html_document
+---
+
+#import packages
+```{python setup, include=FALSE} 
+import pyodbc
+import pandas as pd
+import os
+from IPython.display import display 
+import numpy as np
+```
+
+#merging dataset
+```{python, include=FALSE} 
+# Define the folder path
+folder_path = r"C:\Users\ohdaw\OneDrive - Harvard University\tu_data"
+
+# Function to read CSV with encoding handling
+def read_csv_with_encoding(file_path):
+    try:
+        return pd.read_csv(file_path, encoding="utf-8")  # Try UTF-8 first
+    except UnicodeDecodeError:
+        return pd.read_csv(file_path, encoding="ISO-8859-1")  # Fallback to ISO-8859-1
+
+# Load CSV files with error handling
+deltur = read_csv_with_encoding(os.path.join(folder_path, "deltur.csv"))
+tur = read_csv_with_encoding(os.path.join(folder_path, "tur.csv"))
+journey = read_csv_with_encoding(os.path.join(folder_path, "journey.csv"))
+session = read_csv_with_encoding(os.path.join(folder_path, "session.csv"))
+
+# Step 1: Join deltur.csv with tur.csv on "TurId"
+df_1 = deltur.merge(tur, on="TurId", how="left")
+
+# Save the merged dataset
+output_path = os.path.join(folder_path, "deltur_tur.csv")
+df_1.to_csv(output_path, index=False, encoding="utf-8-sig")  # Save with safe encoding
+
+# Step 2: Join the result with journey.csv on "SessionId"
+df_2 = df_1.merge(journey, on="JourneyId", how="left")
+
+# Save the merged dataset
+output_path = os.path.join(folder_path, "deltur_tur_journey.csv")
+df_2.to_csv(output_path, index=False, encoding="utf-8-sig")  # Save with safe encoding
+
+# Remove columns ending with "_x" and rename "_y" columns
+df_2 = df_2[[col for col in df_2.columns if not col.endswith("_x")]]
+df_2.columns = [col[:-2] if col.endswith("_y") else col for col in df_2.columns]
+
+# Step 3: Join the result with session.csv on "SessionId"
+df_3 = df_2.merge(session, on="SessionId", how="left")
+
+# Save the final merged dataset
+output_path = os.path.join(folder_path, "deltur_tur_journey_session.csv")
+df_3.to_csv(output_path, index=False, encoding="utf-8-sig")  # Save with safe encoding
+```
+
+```{python}
+household = read_csv_with_encoding(os.path.join(folder_path, "household.csv"))
+df_4 = df_3.merge(household, on="SessionId", how="left")
+
+df_4 = df_4[[col for col in df_4.columns if not col.endswith("_x")]]
+df_4.columns = [col[:-2] if col.endswith("_y") else col for col in df_4.columns]
+
+output_path = os.path.join(folder_path, "deltur_tur_journey_session_hh.csv")
+df_4.to_csv(output_path, index=False, encoding="utf-8-sig")
+```
+
+```{python}
+folder_path = r"C:\Users\ohdaw\OneDrive - Harvard University\tu_data"
+filtered_df_path = os.path.join(folder_path, "deltur_tur_journey_session_hh.csv")
+
+# Load dataset
+final_df_filtered = pd.read_csv(filtered_df_path, encoding="utf-8-sig")
+
+# Step 1: Compute children counts (only for people < 85)
+final_df_filtered["Num_0_9"] = np.nan
+final_df_filtered.loc[final_df_filtered["AgeSimple"] < 85, "Num_0_9"] = (
+    final_df_filtered["HousehNumPers"] - final_df_filtered["HousehNumPers1084"]
+)
+
+# Compute number of children aged 10–17
+final_df_filtered["Num_10_17"] = (
+    final_df_filtered["HousehNumPers"]
+    - final_df_filtered["HousehNumAdults"]
+    - final_df_filtered["Num_0_9"]
+)
+
+# Step 2: Filter to households with only children under 10 (no 10–17s)
+final_df_filtered = final_df_filtered[
+    (final_df_filtered["Num_0_9"] > 0) &
+    (final_df_filtered["Num_10_17"] == 0)
+]
+
+output_filtered_path = os.path.join(folder_path, "merged_filtered_0to9only.csv")
+final_df_filtered.to_csv(output_filtered_path, index=False, encoding="utf-8-sig")
+```
+
+#The number of younger/older sibling in HH
+```{python}
+# Step 4: Get one row per household and merge
+household_df = final_df_filtered.drop_duplicates("SessionId")[["SessionId", "Num_0_9", "Num_10_17"]].copy()
+
+# Step 4: Categorize
+def categorize(row):
+    has_0_9 = row["Num_0_9"] > 0
+    has_10_17 = row["Num_10_17"] > 0
+
+    if has_0_9 and has_10_17:
+        return "With Children 0–9 & With 10–17"
+    elif has_0_9 and not has_10_17:
+        return "With Children 0–9 & Without 10–17"
+    elif not has_0_9 and has_10_17:
+        return "Without Children 0–9 & With 10–17"
+    else:
+        return "Without Children 0–9 & Without 10–17"
+
+household_df["Category"] = household_df.apply(categorize, axis=1)
+
+# Step 5: Count and summarize
+summary_df = household_df["Category"].value_counts().reset_index()
+summary_df.columns = ["Category", "Count"]
+total_households = household_df.shape[0]
+summary_df["Percentage"] = (summary_df["Count"] / total_households * 100).round(2)
+
+# Optional: Add total row
+summary_df = pd.concat([
+    pd.DataFrame({
+        "Category": ["Total Households"],
+        "Count": [total_households],
+        "Percentage": [100.0]
+    }),
+    summary_df
+], ignore_index=True)
+
+print(summary_df)
+```
+
+#filtering households with children
+```{python, include=FALSE}
+# Define folder path
+#folder_path = r"C:\Users\ohdaw\OneDrive - Harvard University\tu_data"
+#filtered_df_path = os.path.join(folder_path, "deltur_tur_journey_session.csv")
+
+# Load dataset
+#final_df_filtered = pd.read_csv(filtered_df_path, encoding="utf-8-sig")
+
+# Filter households where (FamNumPers - FamNumAdults) ≠ 0 (meaning children are present)
+#final_df_filtered = final_df_filtered[final_df_filtered["HousehNumPers"] - final_df_filtered["HousehNumAdults"] != 0]
+
+# Save the filtered dataset
+#output_filtered_path = os.path.join(folder_path, "merged_filtered.csv")
+#final_df_filtered.to_csv(output_filtered_path, index=False, encoding="utf-8-sig")
+```
+
+
+#Classify the type of journey
+```{python, include=FALSE}
+# Define folder path
+folder_path = r"C:\Users\ohdaw\OneDrive - Harvard University\tu_data"
+filtered_df_path = os.path.join(folder_path, "merged_filtered_0to9only.csv")
+
+# Load dataset
+final_df_filtered = pd.read_csv(filtered_df_path, encoding="utf-8-sig")
+
+# Standardize column names (remove spaces)
+final_df_filtered.columns = final_df_filtered.columns.str.strip()
+
+# Ensure required columns exist
+required_columns = ["PartyNumu10", "JourneyId"]
+missing_columns = [col for col in required_columns if col not in final_df_filtered.columns]
+
+if missing_columns:
+    raise ValueError(f"❌ ERROR: Missing columns: {missing_columns}")
+
+# Replace NaN values with 0
+final_df_filtered[["PartyNumu10"]] = final_df_filtered[["PartyNumu10"]].fillna(0)
+
+# Convert to integer types
+final_df_filtered["PartyNumu10"] = final_df_filtered["PartyNumu10"].astype(int)
+
+# Function to classify journeys
+def classify_journey(df):
+    # Create a boolean column: True if trip has any children
+    
+    # Classify at journey level
+    journey_with_children = df.groupby("JourneyId")["PartyNumu10"].agg(
+        lambda x: 1 if x.all() else 2 if x.any() else 3
+    )
+    
+    # Merge classification back
+    df = df.merge(journey_with_children.rename("JourneyWithChildren"), on="JourneyId", how="left")
+    return df
+
+# Apply classification
+final_df_filtered_0to9 = classify_journey(final_df_filtered)
+
+# Save the updated dataset
+output_classified_path = os.path.join(folder_path, "translated_filtered_classified_0to9only.csv")
+final_df_filtered_0to9.to_csv(output_classified_path, index=False, encoding="utf-8-sig")
+```
+
+
+#categorize modes
+```{python, include=FALSE}
+# Define folder path
+folder_path = r"C:\Users\ohdaw\OneDrive - Harvard University\tu_data"
+csv_file_path = os.path.join(folder_path, "translated_filtered_classified_0to9only.csv")
+
+# Now read the actual file
+final_df_filtered_0to9 = pd.read_csv(csv_file_path)
+
+if "JourneyWithChildren" not in final_df_filtered_0to9.columns:
+    final_df_filtered_0to9 = classify_journey(final_df_filtered_0to9)
+
+# Define Mode Mapping for PrimMode
+mode_mapping = {
+    1: "Walk", 
+    2: "Bicycle", 
+    11: "Motorized Transport", 
+    12: "Motorized Transport", 
+    13: "Motorized Transport", 
+    14: "Motorized Transport", 
+    25: "Public Transport", 
+    31: "Public Transport", 
+    32: "Public Transport", 
+    33: "Public Transport", 
+    34: "Public Transport", 
+    35: "Public Transport", 
+    37: "Public Transport", 
+    41: "Public Transport"
+}
+
+# Ensure journey classification is applied first
+if "JourneyWithChildren" not in final_df_filtered_0to9.columns:
+    final_df_filtered_0to9 = classify_journey(final_df_filtered_0to9)  # Apply function if missing
+
+# Filter dataset for selected PrimMode values
+filtered_modes = final_df_filtered_0to9[final_df_filtered_0to9["PrimMode"].isin(mode_mapping.keys())].copy()
+
+# Create a new column 'primode_cat' with the corresponding categories
+filtered_modes["primode_cat"] = filtered_modes["PrimMode"].map(mode_mapping)
+
+# Ensure JourneyWithChildren column is not missing
+if "JourneyWithChildren" in filtered_modes.columns:
+    # Remove NaN values in JourneyWithChildren
+    filtered_modes_0to9 = filtered_modes.dropna(subset=["JourneyWithChildren"])
+
+    # Group by JourneyId to avoid double-counting and get the primary mode
+    journey_modes_0to9 = (
+        filtered_modes_0to9.groupby(["JourneyId", "JourneyWithChildren"])["primode_cat"]
+        .agg(lambda x: x.mode()[0] if not x.mode().empty else x.iloc[0])  # Select most common mode
+        .reset_index()
+    )
+
+    # Count occurrences of each mode within JourneyWithChildren categories
+    mode_counts_0to9 = journey_modes_0to9.pivot_table(index="JourneyWithChildren", columns="primode_cat", aggfunc="size", fill_value=0)
+
+    # Rename JourneyWithChildren categories
+    category_labels = {1: "Every trip had children", 2: "Some trips had children", 3: "No trips had children"}
+    mode_counts_0to9.index = mode_counts_0to9.index.map(category_labels)
+
+    # Add a "Total Count" column
+    mode_counts_0to9["Total"] = mode_counts_0to9.sum(axis=1)
+
+    # Reset index without "primode_cat" as a column
+    mode_counts_0to9_df = mode_counts_0to9.reset_index()
+
+    # Ensure correct column renaming
+    mode_counts_0to9_df.columns.name = None  # Remove any column group names
+
+    # Rename the first column properly
+    mode_counts_0to9_df = mode_counts_0to9_df.rename(columns={"JourneyWithChildren": "Category"})
+    mode_counts_0to9_df = mode_counts_0to9_df.reset_index(drop=True)
+
+    # Ensure **primode_cat is completely removed**
+    if "primode_cat" in mode_counts_0to9_df.columns:
+        mode_counts_0to9_df = mode_counts_0to9_df.drop(columns=["primode_cat"])
+
+    # Display the cleaned mode count table
+    display(mode_counts_0to9_df)
+
+    # Define the folder path and save the dataframe to CSV
+    folder_path = r"C:\Users\ohdaw\OneDrive - Harvard University\tu_data"
+    output_file = os.path.join(folder_path, "filtered_modes_with_categories_0to9only.csv")
+    filtered_modes_0to9.to_csv(output_file, index=False)
+    print(f"Data saved to {output_file}")
+
+else:
+    print("🚨 ERROR: 'JourneyWithChildren' column is missing after filtering. Check if classify_journey() was applied correctly.")
+```
+
+#Age group of the accompanied kids on a trip
+```{python, include=FALSE}
+# Define folder path
+folder_path = r"C:\Users\ohdaw\OneDrive - Harvard University\tu_data"
+filtered_modes_0to9 = os.path.join(folder_path, "filtered_modes_with_categories_0to9only.csv")
+
+# Read data
+df = pd.read_csv(filtered_modes_0to9, low_memory=False)
+
+# Function to classify journeys
+def classify_journey(df):
+    # Drop existing JourneyWithChildren if present
+    if "JourneyWithChildren" in df.columns:
+        df = df.drop(columns=["JourneyWithChildren"])
+    
+    df["TripHasChild"] = (df["PartyNumu10"] > 0) | (df["PartyNum1017"] > 0)
+
+    # Identify journeys with any children present
+    journey_with_children = df.groupby("JourneyId")["TripHasChild"].agg(
+        lambda x: 1 if x.all() else 2 if x.any() else 3
+    ).rename("JourneyWithChildren")
+
+    # Assign the column directly instead of merging
+    df = df.merge(journey_with_children, on="JourneyId", how="left")
+
+    # Create a new column indicating the presence of specific child age groups
+    def child_presence(row):
+        if row["PartyNumu10"] > 0 and row["PartyNum1017"] > 0:
+            return "Both 0–9 and 10–17"
+        elif row["PartyNumu10"] > 0:
+            return "0–9 only"
+        elif row["PartyNum1017"] > 0:
+            return "10–17 only"
+        else:
+            return "No children"
+
+    df["ChildPresence"] = df.apply(child_presence, axis=1)
+
+    return df
+
+# Apply classification
+data_classified = classify_journey(df)
+
+# Save the updated dataset
+output_classified_path = os.path.join(folder_path, "data_classified_0to9only.csv")
+data_classified.to_csv(output_classified_path, index=False, encoding="utf-8-sig")
+```
+
+
+#Add a categorical variable 'only younger children in tour' 'only older children in the journey' 'both younger and older children on a journey'

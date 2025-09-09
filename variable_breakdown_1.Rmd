@@ -1,0 +1,812 @@
+---
+title: "variable_breakdown_1"
+author: "dawon"
+date: "2025-06-26"
+output: html_document
+---
+
+#import packages
+```{python setup, include=FALSE} 
+import pandas as pd
+import os
+import seaborn as sns
+import matplotlib.pyplot as plt
+```
+
+# Import existing dataset
+```{python, include=FALSE}
+# Define file paths
+folder_path = r"C:\Users\ohdaw\OneDrive - Harvard University\tu_data"
+file_path = os.path.join(folder_path, "data_reduced_hh_0to9_1.csv")
+#output_path = os.path.join(folder_path, ".csv")
+
+# Load dataset
+dt = pd.read_csv(file_path, encoding="utf-8-sig")
+```
+
+# Percentage of each purposes (1)
+```{python echo=FALSE}
+counts = dt.groupby('PrimTargetPurp_Cat')['JourneyId'].nunique().sort_index()
+percentages = dt['PrimTargetPurp_Cat'].value_counts(normalize=True).sort_index() * 100
+
+purpose_summary = pd.DataFrame({
+    'PrimTargetPurp_Cat': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+purpose_summary['Percentage'] = purpose_summary['Percentage'].round(2)
+
+purpose_summary['Purpose'] = purpose_summary['PrimTargetPurp_Cat']
+
+purpose_summary = purpose_summary[['Purpose', 'Count', 'Percentage']]
+
+print(purpose_summary)
+```
+
+## Purpose categories
+1: "home residence"
+11, 50, 12, 13, 14: "work and education"
+20, 23, 31, 32, 33: "errands and shopping"
+21, 22: "chauffeuring"
+25, 38, 42, 43, 45, 47, 49: "leisure and social activities"
+
+# Percentage of each purposes (2)
+```{python echo=FALSE}
+purpose_map = {
+    11: "Workplace",
+    12: "School, educational institution",
+    13: "Youth center, youth club, after-school center",
+    14: "Nursery, crèche, day care",
+    20: "(Unknown Errand)",
+    21: "Escorting to/from activity",
+    22: "Escorting to/from transport",
+    23: "Collect/bring objects",
+    25: "(Unknown leisure)",
+    31: "Shopping",
+    32: "Other errand",
+    33: "Social/health",
+    38: "Church, Religious services",
+    42: "Do sports",
+    43: "Entertainment",
+    45: "Leisure round trip"
+    47: "Meetings in private context",
+    49: "Other leisure activity"
+}
+
+counts = dt.groupby('PrimTargetPurp')['JourneyId'].nunique().sort_index()
+percentages = dt['PrimTargetPurp'].value_counts(normalize=True).sort_index() * 100
+
+purpose_summary = pd.DataFrame({
+    'PrimTargetPurp': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+purpose_summary['Percentage'] = purpose_summary['Percentage'].round(2)
+
+purpose_summary['Purpose'] = purpose_summary['PrimTargetPurp'].map(purpose_map)
+
+purpose_summary = purpose_summary[['Purpose', 'Count', 'Percentage']]
+
+print(purpose_summary)
+```
+
+```{python echo=FALSE}
+# Step 1: Get total travel time per JourneyId
+duration_by_journey = dt.groupby("JourneyId")["TravelTimeMinutes"].sum().reset_index()
+
+# Step 2: Merge with purpose (PrimTargetPurp_Cat)
+# Assuming each JourneyId has one PrimTargetPurp_Cat value — adjust if needed
+journey_purpose = dt[["JourneyId", "PrimTargetPurp_Cat"]].drop_duplicates()
+
+duration_with_purpose = duration_by_journey.merge(journey_purpose, on="JourneyId", how="left")
+
+# Step 3: Get list of unique purposes
+categories = duration_with_purpose["PrimTargetPurp_Cat"].dropna().unique()
+
+# Step 4: Plot histogram for each category
+for cat in categories:
+    subset = duration_with_purpose[duration_with_purpose["PrimTargetPurp_Cat"] == cat]
+
+    plt.figure(figsize=(7, 4))
+    plt.hist(subset["TravelTimeMinutes"], bins=72, range=(0, 720), color='skyblue', edgecolor='black')
+    plt.title(f'Distribution of Journey Duration for "{cat}"')
+    plt.xlabel('Journey Duration (minutes)')
+    plt.ylabel('Number of Journeys')
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.tight_layout()
+    plt.show()
+```
+
+# Distance/ travel time of each purposes (1)
+```{python include=FALSE}
+purpose_stats = dt.groupby("PrimTargetPurp_Cat").agg(
+    Count=("JourneyId", "nunique"),
+    AvgDistance_km=("TransportDistance", "mean"),
+    MedianDistance_km=("TransportDistance", "median"),
+    MinDistance_km=("TransportDistance", "min"),
+    MaxDistance_km=("TransportDistance", "max"),
+    StdDistance_km=("TransportDistance", "std"),
+    AvgTravelTime_min=("TravelTimeMinutes", "mean"),
+    MedianTravelTime_min=("TravelTimeMinutes", "median"),
+    MinTravelTime_min=("TravelTimeMinutes", "min"),
+    MaxTravelTime_min=("TravelTimeMinutes", "max"),
+    StdTravelTime_min=("TravelTimeMinutes", "std")
+).reset_index()
+
+purpose_stats["Purpose"] = purpose_stats["PrimTargetPurp_Cat"]
+
+purpose_stats = purpose_stats[
+    ["Purpose", "Count", "AvgDistance_km", "MedianDistance_km", "MinDistance_km", "MaxDistance_km", "StdDistance_km", "AvgTravelTime_min", "MedianTravelTime_min", "MinTravelTime_min", "MaxTravelTime_min", "StdTravelTime_min"]
+]
+
+purpose_stats = purpose_stats.round(2)
+```
+```{r}
+library(dplyr)
+library(knitr)
+library(reticulate)
+
+reticulate::py$purpose_stats |>
+  arrange(desc(Count)) |>
+  kable(digits = 2, caption = "Trip Purpose Summary Statistics")
+```
+
+# Distance/ travel time of each purposes (2)
+```{python include=FALSE}
+purpose_stats = dt.groupby("PrimTargetPurp").agg(
+    Count=("JourneyId", "nunique"),
+    AvgDistance_km=("TransportDistance", "mean"),
+    MedianDistance_km=("TransportDistance", "median"),
+    MinDistance_km=("TransportDistance", "min"),
+    MaxDistance_km=("TransportDistance", "max"),
+    StdDistance_km=("TransportDistance", "std"),
+    AvgTravelTime_min=("TravelTimeMinutes", "mean"),
+    MedianTravelTime_min=("TravelTimeMinutes", "median"),
+    MinTravelTime_min=("TravelTimeMinutes", "min"),
+    MaxTravelTime_min=("TravelTimeMinutes", "max"),
+    StdTravelTime_min=("TravelTimeMinutes", "std")
+).reset_index()
+
+purpose_stats["Purpose"] = purpose_stats["PrimTargetPurp"].map(purpose_map)
+
+purpose_stats = purpose_stats[
+    ["Purpose", "Count", "AvgDistance_km", "MedianDistance_km", "MinDistance_km", "MaxDistance_km", "StdDistance_km",
+     "AvgTravelTime_min", "MedianTravelTime_min", "MinTravelTime_min", "MaxTravelTime_min", "StdTravelTime_min"]
+]
+
+purpose_stats = purpose_stats.round(2)
+```
+```{r}
+reticulate::py$purpose_stats |>
+  arrange(desc(Count)) |>
+  kable(digits = 2, caption = "Trip Purpose Summary Statistics")
+```
+
+# Percentage of each modes (1)
+```{python echo=FALSE}
+counts = dt.groupby('primode_cat')['JourneyId'].nunique().sort_index()
+percentages = dt['primode_cat'].value_counts(normalize=True).sort_index() * 100
+
+mode_summary = pd.DataFrame({
+    'primode_cat': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+mode_summary['Percentage'] = mode_summary['Percentage'].round(2)
+
+mode_summary['Mode'] = mode_summary['primode_cat']
+
+mode_summary = mode_summary[['Mode', 'Count', 'Percentage']]
+
+print(mode_summary)
+```
+
+## Mode categories
+1: "Walk" 
+2: "Bicycle"
+11, 12, 13, 14: "Motorized Transport"
+25, 31, 32, 33, 34, 35, 37, 41: "Public Transport"
+
+# Percentage of each modes (2)
+```{python echo=FALSE}
+mode_map = {
+    1: "Walk or run",
+    2: "Bicycle",
+    3: "Moped 30",
+    4: "Moped 45",
+    5: "Skateboard/roller skates/scooter",
+    6: "Horse carriage, horse",
+    7: "Disability moped (electric)",
+    8: "Electric scooter etc.",
+    11: "Passenger car",
+    12: "Van",
+    13: "Lorry",
+    14: "Motorcycle",
+    15: "Tractor, working vehicle",
+    25: "Taxi cab",
+    26: "Tourist coach, rented bus",
+    31: "Collective, Public bus",
+    32: "S-train",
+    33: "Other train",
+    34: "Metro train",
+    35: "Dial-a-ride, flexible transport service",
+    37: "Light rail/tram",
+    41: "Ferry, water bus",
+    42: "Pleasure boat",
+    51: "Airplane"
+}
+
+counts = dt.groupby('PrimMode')['JourneyId'].nunique().sort_index()
+percentages = dt['PrimMode'].value_counts(normalize=True).sort_index() * 100
+
+mode_summary = pd.DataFrame({
+    'PrimMode': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+mode_summary['Percentage'] = mode_summary['Percentage'].round(2)
+
+mode_summary['Mode'] = mode_summary['PrimMode'].map(mode_map)
+
+mode_summary = mode_summary[['Mode', 'Count', 'Percentage']]
+
+print(mode_summary)
+```
+
+# Distance/ travel time of each modes (1)
+```{python include=FALSE}
+purpose_stats = dt.groupby("primode_cat").agg(
+    Count=("JourneyId", "nunique"),
+    AvgDistance_km=("SumLen", "mean"),
+    MedianDistance_km=("SumLen", "median"),
+    MinDistance_km=("SumLen", "min"),
+    MaxDistance_km=("SumLen", "max"),
+    StdDistance_km=("SumLen", "std"),
+    AvgTravelTime_min=("SumMin", "mean"),
+    MedianTravelTime_min=("SumMin", "median"),
+    MinTravelTime_min=("SumMin", "min"),
+    MaxTravelTime_min=("SumMin", "max"),
+    StdTravelTime_min=("SumMin", "std")
+).reset_index()
+
+purpose_stats["Mode"] = purpose_stats["primode_cat"]
+
+purpose_stats = purpose_stats[
+    ["Mode", "Count", "AvgDistance_km", "MedianDistance_km", "MinDistance_km", "MaxDistance_km", "StdDistance_km",
+     "AvgTravelTime_min", "MedianTravelTime_min", "MinTravelTime_min", "MaxTravelTime_min", "StdTravelTime_min"]
+]
+
+purpose_stats = purpose_stats.round(2)
+```
+```{r}
+reticulate::py$purpose_stats |>
+  arrange(desc(Count)) |>
+  kable(digits = 2, caption = "Mode Summary Statistics")
+```
+
+# Distance/ travel time of each modes (2)
+```{python include=FALSE}
+purpose_stats = dt.groupby("PrimMode").agg(
+    Count=("JourneyId", "nunique"),
+    AvgDistance_km=("SumLen", "mean"),
+    MedianDistance_km=("SumLen", "median"),
+    MinDistance_km=("SumLen", "min"),
+    MaxDistance_km=("SumLen", "max"),
+    StdDistance_km=("SumLen", "std"),
+    AvgTravelTime_min=("SumMin", "mean"),
+    MedianTravelTime_min=("SumMin", "median"),
+    MinTravelTime_min=("SumMin", "min"),
+    MaxTravelTime_min=("SumMin", "max"),
+    StdTravelTime_min=("SumMin", "std")
+).reset_index()
+
+purpose_stats["Mode"] = purpose_stats["PrimMode"].map(mode_map) 
+
+purpose_stats = purpose_stats[
+    ["Mode", "Count", "AvgDistance_km", "MedianDistance_km", "MinDistance_km", "MaxDistance_km", "StdDistance_km",
+     "AvgTravelTime_min", "MedianTravelTime_min", "MinTravelTime_min", "MaxTravelTime_min", "StdTravelTime_min"]
+]
+
+purpose_stats = purpose_stats.round(2)
+```
+```{r}
+reticulate::py$purpose_stats |>
+  arrange(desc(Count)) |>
+  kable(digits = 2, caption = "Mode Summary Statistics")
+```
+
+#  Number of Journey Types with children under 10y
+```{python echo=FALSE}
+counts = dt.groupby('JourneyWithChildren')['JourneyId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary = pd.DataFrame({
+    'Journey Type  with children under 10y': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+summary['Percentage'] = summary['Percentage'].round(2)
+
+print(summary)
+```
+
+#  Number of accompanied children on a journey under 10y
+```{python echo=FALSE}
+counts = dt.groupby('maxchldu10')['JourneyId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary = pd.DataFrame({
+    'Number of accompanied children on a journey under 10y': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+summary['Percentage'] = summary['Percentage'].round(2)
+
+print(summary)
+```
+
+#  Number of children under 6y in a household
+```{python echo=FALSE}
+counts = dt.groupby('Chldu6')['JourneyId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary = pd.DataFrame({
+    'Number of children under 6y in a household': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+summary['Percentage'] = summary['Percentage'].round(2)
+
+print(summary)
+```
+
+```{python echo=FALSE}
+dt["Chldu6_fam"] = dt["FamNumPers"] - dt["FamNumPersO6"]
+
+counts = dt.groupby('Chldu6_fam')['JourneyId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary = pd.DataFrame({
+    'Number of children under 6y in a family': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+summary['Percentage'] = summary['Percentage'].round(2)
+
+print(summary)
+```
+
+```{python echo=FALSE}
+counts = dt.groupby('NumChld')['JourneyId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary = pd.DataFrame({
+    'Number of children under 18y in a household': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+summary['Percentage'] = summary['Percentage'].round(2)
+
+print(summary)
+```
+
+```{python echo=FALSE}
+dt["NumChld_fam"] = dt["FamNumPers"] - dt["FamNumAdults"]
+
+counts = dt.groupby('NumChld_fam')['JourneyId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary = pd.DataFrame({
+    'Number of children under 18y in a family': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+summary['Percentage'] = summary['Percentage'].round(2)
+
+print(summary)
+```
+
+# Journey complexity
+```{python echo=FALSE}
+counts = dt.groupby('JourneyComplx')['JourneyId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary = pd.DataFrame({
+    'Journey complexity': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+summary['Percentage'] = summary['Percentage'].round(2)
+
+print(summary)
+```
+
+# Gender of the caregivers (1: Male/ 2: Female)
+```{python echo=FALSE}
+counts = dt.groupby('RespSex')['JourneyId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary = pd.DataFrame({
+    'Gender': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+summary['Percentage'] = summary['Percentage'].round(2)
+
+print(summary)
+```
+
+# Work status of the caregivers (0: Worker/ 1: Non-worker)
+```{python echo=FALSE}
+counts = dt.groupby('IsWorker')['JourneyId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary = pd.DataFrame({
+    'Worker': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+summary['Percentage'] = summary['Percentage'].round(2)
+
+print(summary)
+```
+#Number of Older Sibling(Age 10-17) in a Family
+```{python echo=FALSE}
+counts = dt.groupby('NumOlderSibling')['SessionId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary = pd.DataFrame({
+    'Number of Older Siblings (Age 10–17) in a Family': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.round(2)
+})
+print(summary)
+```
+
+# Number of adults in a household
+```{python echo=FALSE}
+counts = dt.groupby('FamNumAdults')['JourneyId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary = pd.DataFrame({
+    'Number of adults in a Family': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+summary['Percentage'] = summary['Percentage'].round(2)
+
+print(summary)
+```
+
+```{python echo=FALSE}
+counts = dt.groupby('HousehNumAdults')['JourneyId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary = pd.DataFrame({
+    'Number of adults in a household': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+summary['Percentage'] = summary['Percentage'].round(2)
+
+print(summary)
+```
+
+# Position in the nuclear family
+```{python echo=FALSE}
+family_map = {
+    10: "Single",
+    11: "Older in couple",
+    12: "Younger in couple",
+    20: "Child in nuclear family"
+}
+
+dt['FamilyPositionLabel'] = dt['PosInFamily'].map(family_map)
+
+dt['FamilyPositionLabel'] = dt['FamilyPositionLabel'].fillna('Missing')
+
+counts = dt.groupby('FamilyPositionLabel')['JourneyId'].nunique()
+percentages = counts / counts.sum() * 100
+
+summary = pd.DataFrame({
+    'Position in the nuclear family': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+summary['Percentage'] = summary['Percentage'].round(2)
+
+print(summary)
+```
+
+# But how many adults in the missing category?
+```{python echo=FALSE}
+# Filter rows where PosInFamily is missing
+missing_family = dt[dt['PosInFamily'].isna()]
+
+# Count unique journeys by number of adults in the family for missing PosInFamily
+counts = missing_family.groupby('FamNumAdults')['JourneyId'].nunique()
+percentages = counts / counts.sum() * 100
+
+# Create summary DataFrame
+summary_missing = pd.DataFrame({
+    'Number of adults in household': counts.index,
+    'Count': counts.values,
+    'Percentage': percentages.values
+})
+
+# Round and sort
+summary_missing['Percentage'] = summary_missing['Percentage'].round(2)
+summary_missing = summary_missing.sort_values('Number of adults in household')
+
+print(summary_missing)
+```
+
+# Total Distance Traveled
+```{python echo=FALSE}
+distance_by_journey = dt.groupby('JourneyId')['TransportDistance'].sum()
+
+# Plot histogram with 300 bins in the range 0–2000 km
+plt.figure(figsize=(7, 4))
+plt.hist(distance_by_journey, bins=2000, range=(0, 200), color='skyblue', edgecolor='black')
+plt.xlabel('Total Distance per Journey (km)')
+plt.ylabel('Number of Journeys')
+plt.title('Distribution of Journey Distances (0–200 km)')
+plt.grid(True, linestyle='--', alpha=0.5)
+plt.tight_layout()
+plt.show()
+```
+
+
+```{python echo=FALSE}
+distance_by_journey = dt.groupby('JourneyId')['TransportDistance'].sum()
+
+# Plot histogram with 300 bins in the range 0–2000 km
+plt.figure(figsize=(7, 4))
+plt.hist(distance_by_journey, bins=8500, range=(0, 850), color='skyblue', edgecolor='black')
+plt.xlabel('Total Distance per Journey (km)')
+plt.ylabel('Number of Journeys')
+plt.title('Distribution of Journey Distances (0–850 km)')
+plt.grid(True, linestyle='--', alpha=0.5)
+plt.tight_layout()
+plt.show()
+```
+
+
+```{python echo=FALSE}
+distance_by_journey_max = dt.groupby('JourneyId')['TransportDistance'].max()
+max_distance = distance_by_journey_max.max()
+
+print(f"Maximum Distance Traveled: {max_distance:.2f}")
+```
+
+# Total Journey Time
+```{python echo=FALSE}
+distance_by_journey = dt.groupby('JourneyId')['TravelTimeMinutes'].sum()
+
+# Plot histogram with 300 bins in the range 0–2000 km
+plt.figure(figsize=(7, 4))
+plt.hist(distance_by_journey, bins=72, range=(0, 720), color='skyblue', edgecolor='black')
+plt.xlabel('Journeys Duration (min)')
+plt.ylabel('Number of Journeys')
+plt.title('Distribution of Journeys Duration')
+plt.grid(True, linestyle='--', alpha=0.5)
+plt.tight_layout()
+plt.show()
+```
+
+```{python echo=FALSE}
+percent_over_720 = (dt['TravelTimeMinutes'] > 720).mean() * 100
+print(f"Percent of travel times over 720 minutes: {percent_over_720:.2f}%")
+```
+
+# Total Transport Time
+```{python echo=FALSE}
+distance_by_journey = dt.groupby('JourneyId')['SumMin'].sum()
+
+# Plot histogram with 300 bins in the range 0–2000 km
+plt.figure(figsize=(7, 4))
+plt.hist(distance_by_journey, bins=70, range=(0, 350), color='skyblue', edgecolor='black')
+plt.xlabel('Total Transport Time per Journey (min)')
+plt.ylabel('Number of Journeys')
+plt.title('Distribution of Transport Time')
+plt.grid(True, linestyle='--', alpha=0.5)
+plt.tight_layout()
+plt.show()
+```
+
+#Total Activity Time
+```{python echo=FALSE}
+distance_by_journey = dt.groupby('JourneyId')['ActivityTime'].sum()
+
+# Plot histogram with 300 bins in the range 0–2000 km
+plt.figure(figsize=(7, 4))
+plt.hist(distance_by_journey, bins=72, range=(0, 720), color='skyblue', edgecolor='black')
+plt.xlabel('Total Activity Time per Journey (min)')
+plt.ylabel('Number of Journeys')
+plt.title('Distribution of Activity Time')
+plt.grid(True, linestyle='--', alpha=0.5)
+plt.tight_layout()
+plt.show()
+```
+
+```{python, echo=FALSE}
+counts = dt.groupby(['PrimTargetPurp_Cat', 'maxchldu10']).size().reset_index(name='Count')
+
+print(counts)
+```
+
+```{python}
+counts = dt.groupby(['PrimTargetPurp_Cat', 'JourneyWithChildren']).size().reset_index(name='Count')
+
+print(counts)
+```
+
+```{python}
+journey_df = dt.groupby(['JourneyId', 'PrimTargetPurp_Cat'])['TravelTimeMinutes'].mean().reset_index()
+
+for purpose in journey_df['PrimTargetPurp_Cat'].unique():
+    subset = journey_df[journey_df['PrimTargetPurp_Cat'] == purpose]
+
+    plt.figure(figsize=(8, 4))
+    sns.histplot(subset['TravelTimeMinutes'], bins=30, kde=True)
+    plt.title(f"Travel Time Distribution: {purpose}")
+    plt.xlabel("Travel Time (minutes)")
+    plt.ylabel("Count")
+    plt.tight_layout()
+    plt.show()
+```
+
+```{python}
+counts = dt.groupby(['PrimTargetPurp_Cat', 'SingleAdult']).size().reset_index(name='Count')
+
+print(counts)
+```
+
+```{python}
+counts = dt.groupby(['PrimTargetPurp_Cat', 'HousehNumAdults']).size().reset_index(name='Count')
+
+print(counts)
+```
+
+```{python}
+journey_df = dt.groupby(['JourneyId', 'PrimTargetPurp_Cat'])['RespAgeSimple'].mean().reset_index()
+
+for age in journey_df['PrimTargetPurp_Cat'].unique():
+    subset = journey_df[journey_df['PrimTargetPurp_Cat'] == age]
+
+    plt.figure(figsize=(8, 4))
+    sns.histplot(subset['RespAgeSimple'], bins=30, kde=True)
+    plt.title(f"Caregiver's Age Distribution: {age}")
+    plt.xlabel("Caregiver's Agee (years)")
+    plt.ylabel("Count")
+    plt.tight_layout()
+    plt.show()
+```
+
+```{python}
+counts = dt.groupby(['PosInFamily', 'RespSex']).size().reset_index(name='Count')
+
+print(counts)
+
+# 10	Single	
+# 11	Older in couple	
+# 12	Younger in couple
+```
+```{python}
+purpose_map = {
+    11: "Workplace",
+    12: "School, educational institution",
+    13: "Youth center, youth club, after-school center",
+    14: "Nursery, crèche, day care",
+    20: "(Unknown Errand)",
+    21: "Escorting to/from activity",
+    22: "Escorting to/from transport",
+    23: "Collect/bring objects",
+    25: "(Unknown leisure)",
+    31: "Shopping",
+    32: "Other errand",
+    33: "Social/health",
+    38: "Church, Religious services",
+    42: "Do sports",
+    43: "Entertainment",
+    45: "Leisure round trip",
+    47: "Meetings in private context",
+    49: "Other leisure activity"
+}
+
+journey_counts = dt.groupby('PrimTargetPurp')['JourneyId'].nunique().sort_index()
+
+journey_percentages = (journey_counts / journey_counts.sum() * 100).round(2)
+
+purpose_summary = pd.DataFrame({
+    'PrimTargetPurp': journey_counts.index,
+    'Count': journey_counts.values,
+    'Percentage': journey_percentages.values,
+    'Purpose': journey_counts.index.map(purpose_map)
+})
+
+purpose_child_counts = (
+    dt.groupby(['PrimTargetPurp', 'JourneyWithChildren'])['JourneyId']
+    .nunique()
+    .reset_index(name='Count')
+)
+
+print("=== Purpose Summary ===")
+print(purpose_summary)
+
+print("\n=== Journey Counts by Purpose & JourneyWithChildren ===")
+print(purpose_child_counts)
+```
+
+```{python}
+cols = [
+    'JourneyWithChildren',
+    'primode_cat',
+    'PrimTargetPurp_Cat',
+    'inc_quant',
+    'OlderSibling',
+    'YoungerInCouple',
+    'IsWoman',
+    'IsWorker',
+    'JourneyComplx',
+    'RespSex'
+]
+
+one_hot = pd.get_dummies(dt[cols], columns=cols[1:])
+
+summary = one_hot.groupby('JourneyWithChildren').sum()
+
+with pd.option_context('display.max_rows', None, 'display.max_columns', None):
+    print(summary)
+```
+
+```{python}
+cols = [
+    'JourneyWithChildren',
+    'TravelTimeMinutes',
+    'IncHouseh',
+    'HousehNumPers',
+    'HousehNumAdults',
+    'HousehNumPersU10',
+    'Chldu6',
+    'maxchldu10',
+    'RespAgeSimple'
+]
+
+summary_stats = dt[cols].groupby('JourneyWithChildren').agg(['mean', 'median', 'min', 'max', 'std'])
+
+with pd.option_context('display.max_rows', None, 'display.max_columns', None):
+    print(summary_stats)
+```
+
+```{python}
+# Step 1: Count number of unique JourneyId's per SessionId
+journeys_per_session = dt.groupby('SessionId')['JourneyId'].nunique()
+
+# Step 2: Count how many SessionIds fall into each journey count group
+summary = journeys_per_session.value_counts().sort_index().reset_index()
+summary.columns = ['JourneyId per SessionId', 'Count']
+
+# Step 3: Print the table
+print(summary)
+```
+
+
+
+

@@ -1,0 +1,51 @@
+---
+title: "simple_inR"
+author: "dawon"
+date: "2025-03-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+require(foreign)
+require(nnet)
+require(ggplot2)
+require(reshape2)
+
+library(stargazer)
+```
+
+```{r, include=FALSE}
+dt <- read.csv("C:\\Users\\ohdaw\\OneDrive - Harvard University\\tu_data\\data_reduced.csv")
+dt <- as.data.frame(dt)
+```
+
+```{r echo=TRUE}
+with(dt, table(NumChld, JourneyWithChildren))
+```
+```{r include=FALSE}
+dt$JourneyWithChildren <- as.factor(dt$JourneyWithChildren) 
+dt$prog <- relevel(dt$JourneyWithChildren, ref = "2")  
+test <- multinom(prog ~ TravelTimeMinutes + NumChld, data = dt)
+```
+
+```{r echo=TRUE}
+summary(test)
+```
+```{r include=FALSE}
+stargazer(test, type = "html", digits=3, out="model.htm")
+```
+
+
+```{r echo=TRUE}
+z <- summary(test)$coefficients/summary(test)$standard.errors
+z
+```
+
+```{r echo=TRUE}
+## extract the coefficients from the model and exponentiate
+exp(coef(test))
+```
+
+```{r echo=TRUE}
+head(pp <- fitted(test))
+```

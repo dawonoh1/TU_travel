@@ -1,0 +1,368 @@
+---
+title: "simple_model"
+author: "dawon"
+date: "2025-03-26"
+output: html_document
+---
+
+# Categorical variable transformation
+```{python include=FALSE}
+import pandas as pd
+import biogeme
+import biogeme.version as ver
+
+# Load Data
+file_path = r"C:\Users\ohdaw\OneDrive - Harvard University\tu_data\data_reduced.csv"
+data = pd.read_csv(file_path)
+```
+
+# Formatting variable
+```{python echo=FALSE}
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Assuming you already have a dataframe called 'data'
+
+# List of variables to plot
+variables = ["primode_cat", "TravelTimeMinutes", "PrimTargetPurp_Cat", "HousehNumPers", "HousehNumAdults", "NumChld", "PartyNumu10", "PartyNum1017", "AgeOldChld", "Chldu6", "HhStruct", "JourneyComplx", "RespSex", "RespAgeSimple"]
+             
+# Set plot style
+sns.set(style="whitegrid")
+
+# Loop through each variable and create a histogram or countplot
+for var in variables:
+    plt.figure(figsize=(8, 4))
+    
+    if pd.api.types.is_numeric_dtype(data[var]):
+        sns.histplot(data[var].dropna(), kde=False, bins=20)
+        plt.ylabel("Count")
+    else:
+        sns.countplot(x=var, data=data)
+        plt.xticks(rotation=45, ha='right')
+    
+    plt.title(f'Distribution of {var}')
+    plt.xlabel(var)
+    plt.tight_layout()
+    plt.show()
+```
+
+# Formating for parameters
+```{python, include=FALSE}
+# One-hot encode JourneyWithChildren (0/1 format)
+data = pd.get_dummies(data, columns=["JourneyWithChildren"], prefix="JWC")
+
+# Check transformed dataset
+print(data.head())
+```
+
+# Convert categorical variables
+```{python include=FALSE}
+# Convert categorical variables to integer codes
+categorical_columns = ["primode_cat", "PrimTargetPurp_Cat", "AgeOldChld", "HhStruct", "JourneyComplx", "RespSex"]
+
+data = pd.get_dummies(data, columns=categorical_columns, drop_first=False)
+
+# Convert boolean columns to integers (if applicable)
+bool_columns = ["JWC_0", "JWC_1", "JWC_2"]
+data[bool_columns] = data[bool_columns].astype(int)
+
+# Drop rows with missing values (or impute them if needed)
+data = data.dropna() 
+```
+
+# Import database
+```{python include=FALSE}
+import biogeme.database as db
+import biogeme.biogeme as bio
+from biogeme import models
+from biogeme.expressions import Beta
+from biogeme . expressions import Variable
+
+# Load data into Biogeme database
+data = data.astype({col: 'int' for col in data.select_dtypes('bool').columns})
+database = db.Database("JourneyChoice", data)
+```
+
+# Formatting variable
+```{python include=FALSE}
+primode_cat = Variable ("primode_cat")
+primode_cat_Bicycle = Variable ("primode_cat_Bicycle")
+primode_cat_Walk = Variable ("primode_cat_Walk")
+primode_cat_PublicTransport = Variable ("primode_cat_Public Transport")
+primode_cat_MotorizedTransport = Variable ("primode_cat_Motorized Transport")
+TravelTimeMinutes = Variable ("TravelTimeMinutes")
+PrimTargetPurp = Variable ("PrimTargetPurp")
+PrimTargetPurp_Cat_Chauffeuring = Variable ("PrimTargetPurp_Cat_chauffeuring")
+PrimTargetPurp_Cat_Education = Variable ("PrimTargetPurp_Cat_education")
+PrimTargetPurp_Cat_ErrandsShopping = Variable ("PrimTargetPurp_Cat_errands and shopping")
+PrimTargetPurp_Cat_HomeResidence = Variable ("PrimTargetPurp_Cat_home residence")
+PrimTargetPurp_Cat_LeisureSocial = Variable ("PrimTargetPurp_Cat_leisure and social activities")
+PrimTargetPurp_Cat_WorkBusiness = Variable ("PrimTargetPurp_Cat_work and business")
+PrimTargetPurp_Cat_other = Variable ("PrimTargetPurp_Cat_other")
+HousehNumPers = Variable ("HousehNumPers")
+HousehNumAdults = Variable ("HousehNumAdults")
+NumChld = Variable ("NumChld")
+PartyNumu10 = Variable ("PartyNumu10")
+PartyNum1017 = Variable ("PartyNum1017")
+AgeOldChld = Variable ("AgeOldChld")
+AgeOldChld_0to9 = Variable ("AgeOldChld_0to9")
+AgeOldChld_10to17 = Variable ("AgeOldChld_10to17")
+Chldu6 = Variable ("Chldu6")
+HhStruct = Variable ("HhStruct")
+HhStruct_Couple = Variable ("HhStruct_Couple household")
+HhStruct_MultiAdults = Variable ("HhStruct_Multi-adult household")
+HhStruct_SingleAdult = Variable ("HhStruct_Single-adult household")
+JourneyComplx = Variable ("JourneyComplx")
+JourneyComplx_Simple = Variable ("JourneyComplx_Simple Journey")
+JourneyComplx_TripChaining = Variable ("JourneyComplx_Trip Chaining")
+RespSex = Variable ("RespSex")
+RespSex_Male = Variable ("RespSex_1")
+RespSex_Female = Variable ("RespSex_2")
+RespAgeSimple = Variable ("RespAgeSimple")
+
+#primode_cat = database.DefineVariable("primode_cat","primode_cat")
+#TravelTimeMinutes = database.DefineVariable ("TravelTimeMinutes","TravelTimeMinutes")
+#PrimTargetPurp_Cat = database.DefineVariable ("PrimTargetPurp_Cat","PrimTargetPurp_Cat")
+#HousehNumPers = database.DefineVariable ("HousehNumPers","HousehNumPers")
+#HousehNumAdults = database.DefineVariable ("HousehNumAdults","HousehNumAdults")
+#NumChld = database.DefineVariable ("NumChld","NumChld")
+#PartyNumu10 = database.DefineVariable ("PartyNumu10","PartyNumu10")
+#PartyNum1017 = database.DefineVariable ("PartyNum1017","PartyNum1017")
+#AgeOldChld = database.DefineVariable ("AgeOldChld","AgeOldChld")
+#Chldu6 = database.DefineVariable ("Chldu6","Chldu6")
+#HhStruct = database.DefineVariable ("HhStruct","HhStruct")
+#JourneyComplx = database.DefineVariable ("JourneyComplx","JourneyComplx")
+#RespSex = database.DefineVariable ("RespSex","RespSex")
+#RespAgeSimple = database.DefineVariable ("RespAgeSimple","RespAgeSimple")
+```
+
+# log transforming
+```{python echo=FALSE}
+from biogeme.expressions import Variable, log
+import numpy as np
+
+#Define the symbolic log-transformed variable
+database = db.Database("JourneyChoice", data)
+TravelTimeMinutes = Variable('TravelTimeMinutes')
+database.DefineVariable('TTM_scaled', log(TravelTimeMinutes))
+TTM_scaled = Variable('TTM_scaled')
+
+# Log transform TravelTimeMinutes using log1p to handle 0s
+log_ttm = np.log1p(data["TravelTimeMinutes"])
+
+# Plot the histogram
+plt.figure(figsize=(8, 4))
+sns.histplot(log_ttm, bins=30, kde=True)
+plt.xlabel("log(TravelTimeMinutes + 1)")
+plt.ylabel("Count")
+plt.title("Histogram of Log-Transformed Travel Time")
+plt.tight_layout()
+plt.show()
+```
+# Parameters to be estimated
+```{python include=FALSE}
+# Define parameters to estimate
+ASC_JWC_0 = Beta('ASC_JWC_0', 0, None, None, 0)
+ASC_JWC_1 = Beta("ASC_JWC_1", 0, None, None, 0) 
+ASC_JWC_2 = Beta("ASC_JWC_2", 0, None, None, 1) 
+
+B_time_0 = Beta("B_time_0", 0, None, None, 0)
+B_primode_cat_Walk_0 = Beta("B_primode_cat_Walk_0", 0, None, None, 0)
+B_primode_cat_Bicycle_0 = Beta("B_primode_cat_Bicycle_0", 0, None, None, 0)
+B_primode_cat_PublicTransport_0 = Beta("B_primode_cat_PublicTransport_0", 0, None, None, 0)
+B_primode_cat_MotorizedTransport_0 = Beta("B_primode_cat_MotorizedTransport_0", 0, None, None, 0)
+B_PrimTargetPurp_Cat_Chauffeuring_0 = Beta("B_PrimTargetPurp_Cat_Chauffeuring_0", 0, None, None, 0)
+B_PrimTargetPurp_Cat_Education_0 = Beta("B_PrimTargetPurp_Cat_Education_0", 0, None, None, 0)
+B_PrimTargetPurp_Cat_ErrandsShopping_0 = Beta("B_PrimTargetPurp_Cat_ErrandsShopping_0", 0, None, None, 0)
+B_PrimTargetPurp_Cat_HomeResidence_0 = Beta("B_PrimTargetPurp_Cat_HomeResidence_0", 0, None, None, 0)
+B_PrimTargetPurp_Cat_LeisureSocial_0 = Beta("B_PrimTargetPurp_Cat_LeisureSocial_0", 0, None, None, 0)
+B_PrimTargetPurp_Cat_WorkBusiness_0 = Beta("B_PrimTargetPurp_Cat_WorkBusiness_0", 0, None, None, 0)
+B_PrimTargetPurp_Cat_other_0 = Beta("B_PrimTargetPurp_Cat_other_0", 0, None, None, 0)
+B_numA_0 = Beta("B_numA_0", 0, None, None, 0)
+B_HhStruct_Couple_0 = Beta("B_HhStruct_Couple_0", 0, None, None, 0)
+B_HhStruct_MultiAdults_0 = Beta("B_HhStruct_MultiAdults_0", 0, None, None, 0)
+B_HhStruct_SingleAdult_0 = Beta("B_HhStruct_SingleAdult_0", 0, None, None, 0)
+B_JourneyComplx_Simple_0 = Beta("B_JourneyComplx_Simple_0", 0, None, None, 0)
+B_JourneyComplx_TripChaining_0 = Beta("B_JourneyComplx_TripChaining_0", 0, None, None, 0)
+B_AgeOldChld_0to9_0 = Beta("B_AgeOldChld_0to9_0", 0, None, None, 0)
+B_AgeOldChld_10to17_0 = Beta("B_AgeOldChld_10to17_0", 0, None, None, 0)
+B_Aage_0 = Beta("B_Aage_0", 0, None, None, 0)
+B_RespSex_Male_0 = Beta("B_RespSex_Male_0", 0, None, None, 0)  
+B_RespSex_Female_0 = Beta("B_RespSex_Female_0", 0, None, None, 0)  
+
+B_time_1 = Beta("B_time_1", 0, None, None, 0)
+B_primode_cat_Walk_1 = Beta("B_primode_cat_Walk_1", 0, None, None, 0)
+B_primode_cat_Bicycle_1 = Beta("B_primode_cat_Bicycle_1", 0, None, None, 0)
+B_primode_cat_PublicTransport_1 = Beta("B_primode_cat_PublicTransport_1", 0, None, None, 0)
+B_primode_cat_MotorizedTransport_1 = Beta("B_primode_cat_MotorizedTransport_1", 0, None, None, 0)
+B_PrimTargetPurp_Cat_Chauffeuring_1 = Beta("B_PrimTargetPurp_Cat_Chauffeuring_1", 0, None, None, 0)
+B_PrimTargetPurp_Cat_Education_1 = Beta("B_PrimTargetPurp_Cat_Education_1", 0, None, None, 0)
+B_PrimTargetPurp_Cat_ErrandsShopping_1 = Beta("B_PrimTargetPurp_Cat_ErrandsShopping_1", 0, None, None, 0)
+B_PrimTargetPurp_Cat_HomeResidence_1 = Beta("B_PrimTargetPurp_Cat_HomeResidence_1", 0, None, None, 0)
+B_PrimTargetPurp_Cat_LeisureSocial_1 = Beta("B_PrimTargetPurp_Cat_LeisureSocial_1", 0, None, None, 0)
+B_PrimTargetPurp_Cat_WorkBusiness_1 = Beta("B_PrimTargetPurp_Cat_WorkBusiness_1", 0, None, None, 0)
+B_PrimTargetPurp_Cat_other_1 = Beta("B_PrimTargetPurp_Cat_other_1", 0, None, None, 0)
+B_numA_1 = Beta("B_numA_1", 0, None, None, 0)
+B_HhStruct_Couple_1 = Beta("B_HhStruct_Couple_1", 0, None, None, 0)
+B_HhStruct_MultiAdults_1 = Beta("B_HhStruct_MultiAdults_1", 0, None, None, 0)
+B_HhStruct_SingleAdult_1 = Beta("B_HhStruct_SingleAdult_1", 0, None, None, 0)
+B_JourneyComplx_Simple_1 = Beta("B_JourneyComplx_Simple_1", 0, None, None, 0)
+B_JourneyComplx_TripChaining_1 = Beta("B_JourneyComplx_TripChaining_1", 0, None, None, 0)
+B_AgeOldChld_0to9_1 = Beta("B_AgeOldChld_0to9_1", 0, None, None, 0)
+B_AgeOldChld_10to17_1 = Beta("B_AgeOldChld_10to17_1", 0, None, None, 0)
+B_Aage_1 = Beta("B_Aage_1", 0, None, None, 0)
+B_RespSex_Male_1 = Beta("B_RespSex_Male_1", 0, None, None, 0)  
+B_RespSex_Female_1 = Beta("B_RespSex_Female_1", 0, None, None, 0)  
+
+B_time_2 = Beta("B_time_2", 0, None, None, 1)
+B_primode_cat_Walk_2 = Beta("B_primode_cat_Walk_2", 0, None, None, 1)
+B_primode_cat_Bicycle_2 = Beta("B_primode_cat_Bicycle_2", 0, None, None, 1)
+B_primode_cat_PublicTransport_2 = Beta("B_primode_cat_PublicTransport_2", 0, None, None, 1)
+B_primode_cat_MotorizedTransport_2 = Beta("B_primode_cat_MotorizedTransport_2", 0, None, None, 1)
+B_PrimTargetPurp_Cat_Chauffeuring_2 = Beta("B_PrimTargetPurp_Cat_Chauffeuring_2", 0, None, None, 1)
+B_PrimTargetPurp_Cat_Education_2 = Beta("B_PrimTargetPurp_Cat_Education_2", 0, None, None, 1)
+B_PrimTargetPurp_Cat_ErrandsShopping_2 = Beta("B_PrimTargetPurp_Cat_ErrandsShopping_2", 0, None, None, 1)
+B_PrimTargetPurp_Cat_HomeResidence_2 = Beta("B_PrimTargetPurp_Cat_HomeResidence_2", 0, None, None, 1)
+B_PrimTargetPurp_Cat_LeisureSocial_2 = Beta("B_PrimTargetPurp_Cat_LeisureSocial_2", 0, None, None, 1)
+B_PrimTargetPurp_Cat_WorkBusiness_2 = Beta("B_PrimTargetPurp_Cat_WorkBusiness_2", 0, None, None, 1)
+B_PrimTargetPurp_Cat_other_2 = Beta("B_PrimTargetPurp_Cat_other_2", 0, None, None, 1)
+B_numA_2 = Beta("B_numA_2", 0, None, None, 1)
+B_HhStruct_Couple_2 = Beta("B_HhStruct_Couple_2", 0, None, None, 1)
+B_HhStruct_MultiAdults_2 = Beta("B_HhStruct_MultiAdults_2", 0, None, None, 1)
+B_HhStruct_SingleAdult_2 = Beta("B_HhStruct_SingleAdult_2", 0, None, None, 1)
+B_JourneyComplx_Simple_2 = Beta("B_JourneyComplx_Simple_2", 0, None, None, 1)
+B_JourneyComplx_TripChaining_2 = Beta("B_JourneyComplx_TripChaining_2", 0, None, None, 1)
+B_AgeOldChld_0to9_2 = Beta("B_AgeOldChld_0to9_2", 0, None, None, 1)
+B_AgeOldChld_20to17_2 = Beta("B_AgeOldChld_20to17_2", 0, None, None, 1)
+B_Aage_2 = Beta("B_Aage_2", 0, None, None, 1)
+B_RespSex_Male_2 = Beta("B_RespSex_Male_2", 0, None, None, 1)  
+B_RespSex_Female_2 = Beta("B_RespSex_Female_2", 0, None, None, 1)  
+```
+
+#  If all alternatives are always available
+```{python include=FALSE}
+data["Avail_JWC_0"] = 1
+data["Avail_JWC_1"] = 1
+data["Avail_JWC_2"] = 1
+
+database = db.Database("JourneyChoice", data)
+Avail_JWC_0 = database.variables["Avail_JWC_0"]
+Avail_JWC_1 = database.variables["Avail_JWC_1"]
+Avail_JWC_2 = database.variables["Avail_JWC_2"]
+```
+
+```{python include=FALSE}
+# Define utility functions (JWC_2 is the reference alternative, so its utility is 0)
+V_0 = (
+ASC_JWC_0 + 
+B_time_0 * TTM_scaled +
+B_primode_cat_Walk_0 * primode_cat_Walk +
+B_primode_cat_Bicycle_0 * primode_cat_Bicycle +
+B_primode_cat_PublicTransport_0 * primode_cat_PublicTransport + # base = Motorized Transport (car)
+B_PrimTargetPurp_Cat_HomeResidence_0 * PrimTargetPurp_Cat_HomeResidence  +
+B_PrimTargetPurp_Cat_WorkBusiness_0 * PrimTargetPurp_Cat_WorkBusiness +
+B_PrimTargetPurp_Cat_ErrandsShopping_0 * PrimTargetPurp_Cat_ErrandsShopping +
+B_PrimTargetPurp_Cat_LeisureSocial_0 * PrimTargetPurp_Cat_LeisureSocial +
+B_PrimTargetPurp_Cat_Education_0 * PrimTargetPurp_Cat_Education + # base = chauffeuring (Pick Up/Drop Off)
+B_numA_0 * HousehNumAdults +
+B_HhStruct_Couple_0 * HhStruct_Couple +
+B_HhStruct_MultiAdults_0 * HhStruct_MultiAdults + # base = Single adult household
+B_JourneyComplx_TripChaining_0 * JourneyComplx_TripChaining + # base = Simple Trip (one destination)
+B_AgeOldChld_0to9_0 * AgeOldChld_0to9 + # base = Oldest Children is age  10-17
+B_Aage_0 * RespAgeSimple + 
+B_RespSex_Female_0 * RespSex_Female # base = 1 (man/boy)
+)
+
+
+
+V_1 = (
+ASC_JWC_1 + 
+B_time_1 * TTM_scaled +
+B_primode_cat_Walk_1 * primode_cat_Walk +
+B_primode_cat_Bicycle_1 * primode_cat_Bicycle +
+B_primode_cat_PublicTransport_1 * primode_cat_PublicTransport + # base = Motorized Transport (car)
+B_PrimTargetPurp_Cat_HomeResidence_1 * PrimTargetPurp_Cat_HomeResidence  +
+B_PrimTargetPurp_Cat_WorkBusiness_1 * PrimTargetPurp_Cat_WorkBusiness +
+B_PrimTargetPurp_Cat_ErrandsShopping_1 * PrimTargetPurp_Cat_ErrandsShopping +
+B_PrimTargetPurp_Cat_LeisureSocial_1 * PrimTargetPurp_Cat_LeisureSocial +
+B_PrimTargetPurp_Cat_Education_1 * PrimTargetPurp_Cat_Education + # base = chauffeuring (Pick Up/Drop Off)
+B_numA_1 * HousehNumAdults +
+B_HhStruct_Couple_1 * HhStruct_Couple +
+B_HhStruct_MultiAdults_1 * HhStruct_MultiAdults + # base = Single adult household
+B_JourneyComplx_TripChaining_1 * JourneyComplx_TripChaining + # base = Simple Trip (one destination)
+B_AgeOldChld_0to9_1 * AgeOldChld_0to9 + # base = Oldest Children is age  10-17
+B_Aage_1 * RespAgeSimple + 
+B_RespSex_Female_1 * RespSex_Female # base = 1 (man/boy)
+)
+
+
+V_2 = (
+ASC_JWC_2 + 
+B_time_2 * TTM_scaled +
+B_primode_cat_Walk_2 * primode_cat_Walk +
+B_primode_cat_Bicycle_2 * primode_cat_Bicycle +
+B_primode_cat_PublicTransport_2 * primode_cat_PublicTransport + # base = Motorized Transport (car)
+B_PrimTargetPurp_Cat_HomeResidence_2 * PrimTargetPurp_Cat_HomeResidence  +
+B_PrimTargetPurp_Cat_WorkBusiness_2 * PrimTargetPurp_Cat_WorkBusiness +
+B_PrimTargetPurp_Cat_ErrandsShopping_2 * PrimTargetPurp_Cat_ErrandsShopping +
+B_PrimTargetPurp_Cat_LeisureSocial_2 * PrimTargetPurp_Cat_LeisureSocial +
+B_PrimTargetPurp_Cat_Education_2 * PrimTargetPurp_Cat_Education + # base = chauffeuring (Pick Up/Drop Off)
+B_numA_2 * HousehNumAdults +
+B_HhStruct_Couple_2 * HhStruct_Couple +
+B_HhStruct_MultiAdults_2 * HhStruct_MultiAdults + # base = Single adult household
+B_JourneyComplx_TripChaining_2 * JourneyComplx_TripChaining + # base = Simple Trip (one destination)
+B_AgeOldChld_0to9_2 * AgeOldChld_0to9 + # base = Oldest Children is age  10-17
+B_Aage_2 * RespAgeSimple + 
+B_RespSex_Female_2 * RespSex_Female # base = 1 (man/boy)
+)
+
+# Associate utilities with alternatives
+V = {0: V_0, 1: V_1, 2: V_2}
+av = {0: Avail_JWC_0, 1: Avail_JWC_1, 2: Avail_JWC_2}
+```
+
+```{python include=FALSE}
+data["Choice"] = data[["JWC_0", "JWC_1", "JWC_2"]].idxmax(axis=1).str[-1].astype(int)
+bool_columns = data.select_dtypes(include="bool").columns
+data[bool_columns] = data[bool_columns].astype(int)
+
+database = db.Database("JourneyChoice", data)
+Choice = database.variables['Choice']
+```
+
+```{python, echo=TRUE}
+# Define the logit model
+logprob = models.loglogit(V, av, Choice)
+
+# Create the Biogeme object
+the_biogeme = bio.BIOGEME(database, logprob)
+the_biogeme.modelName = "ChoiceModel"
+the_biogeme.calculateNullLoglikelihood (av)
+
+# Estimate the model
+results = the_biogeme.estimate()
+```
+
+```{python, echo=TRUE}
+print (f"HTML file: {results.data.htmlFileName}")
+print (f"Pickle file: {results.data.pickleFileName}")
+```
+
+```{python, echo=TRUE}
+# Print results
+pandasResrults = results.getEstimatedParameters()
+pandasResrults
+```
+```{python, echo=TRUE}
+print(results)
+```
+```{python echo=TRUE}
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+X = data[["primode_cat", "TravelTimeMinutes", "PrimTargetPurp_Cat", "HousehNumAdults", "AgeOldChld", "HhStruct", "JourneyComplx", "RespSex", "RespAgeSimple"]]
+vif_data = pd.DataFrame()
+vif_data["feature"] = X.columns
+vif_data["VIF"] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
+print(vif_data)
+```
+
